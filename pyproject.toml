@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dorje"
+version = "0.1.0"
+description = "Folder-level semantic search CLI"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "tiktoken>=0.7",
+    "tree-sitter>=0.23",
+    "tree-sitter-python>=0.23",
+    "tree-sitter-javascript>=0.23",
+    "tree-sitter-java>=0.23",
+    "tree-sitter-c>=0.23",
+    "tree-sitter-go>=0.23",
+    "rank-bm25>=0.2",
+    "openai>=1.0",
+    "msgpack>=1.0",
+]
+
+[project.scripts]
+dorje = "dorje.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["dorje*"]
+
+[tool.mypy]
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM", "TCH"]
