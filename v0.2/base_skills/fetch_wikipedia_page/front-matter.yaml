@@ -1,0 +1,3 @@
+name: fetch_wikipedia_page
+description: Fetch a Wikipedia page and return its content handle metadata without summarizing or indexing.
+version: 0.1.0
