@@ -7,14 +7,17 @@ from rich import print
 from dorje import __version__
 from dorje.db import connect, init_schema
 from dorje.extensions import load_extensions
+from dorje.skills import load_skills
 from dorje_lm import LMConfig, LMRequest, create_lm_provider
 from dorje_lm.ResponseSchemas import get_response_schema, list_response_schemas
 
 app = typer.Typer(no_args_is_help=True)
 lm_app = typer.Typer(no_args_is_help=True)
 tools_app = typer.Typer(no_args_is_help=True)
+skills_app = typer.Typer(no_args_is_help=True)
 app.add_typer(lm_app, name="lm")
 app.add_typer(tools_app, name="tools")
+app.add_typer(skills_app, name="skills")
 
 
 @app.command()
@@ -44,6 +47,22 @@ def doctor() -> None:
     print(f"SQLite: {sqlite_version}")
     print(f"FTS5: {'yes' if fts_ok else 'no'}")
     print(f"sqlite-vec: {vec_version}")
+
+
+@skills_app.command("list")
+def skills_list() -> None:
+    """List discovered prompt-only skills."""
+    for skill in load_skills().values():
+        print(f"{skill.name}\t{skill.description.strip()}\t{skill.path}")
+
+
+@skills_app.command("show")
+def skills_show(name: str) -> None:
+    """Print a skill prompt."""
+    skills = load_skills()
+    if name not in skills:
+        raise typer.BadParameter(f"unknown skill: {name}")
+    print(skills[name].text)
 
 
 @tools_app.command("list")
