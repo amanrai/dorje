@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
@@ -17,6 +18,7 @@ const MAX_TEXT_CHARS = 1_000_000;
 const SIDECAR_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(SIDECAR_DIR, "../..");
 const HOOK_DIR = path.join(PROJECT_ROOT, "hooks");
+const PI_AGENT_PROMPT = path.join(PROJECT_ROOT, "prompts", "pi_agent_system_prompt.txt");
 
 const processStartedAtMs = Date.now();
 let lastLogAtMs = processStartedAtMs;
@@ -98,16 +100,8 @@ function validateRequest(request) {
 }
 
 function buildSystemPrompt(skillsText) {
-  return [
-    "You are Dorje, an LM-driven information retrieval agent.",
-    "You may use available tools when they help satisfy the user request.",
-    "Use tool results as source material. Do not invent tool results.",
-    "Choose and apply relevant skills from the skill text below; the user does not need to name a skill.",
-    "When you have enough information, answer the user directly in Markdown.",
-    "",
-    "# Available Dorje Skills",
-    skillsText || "No skills loaded.",
-  ].join("\n");
+  const template = fs.readFileSync(PI_AGENT_PROMPT, "utf8");
+  return template.replace("{{ skills_text }}", skillsText || "No skills loaded.");
 }
 
 async function runHook(name, payload = {}) {

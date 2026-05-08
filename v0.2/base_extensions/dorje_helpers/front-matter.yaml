@@ -1,0 +1,5 @@
+name: dorje_helpers
+description: Return documentation for helper functions available inside run_python.
+version: 0.1.0
+tools:
+  - get_dorje_helpers_docs
