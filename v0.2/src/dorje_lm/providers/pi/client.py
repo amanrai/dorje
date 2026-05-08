@@ -24,6 +24,7 @@ class PiProvider:
             "output": request.output,
             "model": model,
             "system": request.system,
+            "schema": request.schema,
         }
         response = self._sidecar.request(payload, request.timeout_s)
         self._raise_if_error(response)

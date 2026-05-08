@@ -51,8 +51,13 @@ function encodePrompt(request) {
     throw new Error("context is too large");
   }
   const system = optionalString(request.system, "system");
+  const schema = request.schema ?? null;
+  const schemaText = schema === null ? null : JSON.stringify(schema);
+  if (schemaText !== null && schemaText.length > MAX_CONTEXT_CHARS) {
+    throw new Error("schema is too large");
+  }
   const outputInstruction = output === "json"
-    ? "Return only valid JSON. Do not wrap it in Markdown."
+    ? "Return only valid JSON matching the provided JSON Schema. Do not wrap it in Markdown."
     : "Return plain text.";
   const parts = [];
   if (system !== null && system.length > 0) {
@@ -60,6 +65,9 @@ function encodePrompt(request) {
   }
   parts.push(`Task:\n${prompt}`);
   parts.push(`Context JSON:\n${contextText}`);
+  if (schemaText !== null) {
+    parts.push(`JSON Schema:\n${schemaText}`);
+  }
   parts.push(outputInstruction);
   return parts.join("\n\n");
 }

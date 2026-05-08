@@ -1,11 +1,13 @@
 from typing import Literal
 
+import orjson
 import typer
 from rich import print
 
 from dorje import __version__
 from dorje.db import connect, init_schema
 from dorje_lm import LMConfig, LMRequest, create_lm_provider
+from dorje_lm.ResponseSchemas import get_response_schema, list_response_schemas
 
 app = typer.Typer(no_args_is_help=True)
 lm_app = typer.Typer(no_args_is_help=True)
@@ -52,13 +54,34 @@ def lm_health(provider: str = "echo", model: str | None = None) -> None:
         lm.close()
 
 
+@lm_app.command("schemas")
+def lm_schemas() -> None:
+    """List named structured-output schemas."""
+    for name in list_response_schemas():
+        print(name)
+
+
 @lm_app.command("complete")
-def lm_complete(prompt: str, provider: str = "echo", model: str | None = None) -> None:
-    """Run one LM completion."""
+def lm_complete(
+    prompt: str,
+    provider: str = "echo",
+    model: str | None = None,
+    schema: str | None = None,
+) -> None:
+    """Run one LM completion, optionally validating against a schema."""
+    schema_class = get_response_schema(schema) if schema is not None else None
+    schema_json = schema_class.model_json_schema() if schema_class is not None else None
+    output = "json" if schema_class is not None else "text"
     lm = create_lm_provider(LMConfig(provider=_lm_provider(provider), model=model))
     try:
-        response = lm.complete(LMRequest(prompt=prompt, model=model))
-        print(response.text)
+        response = lm.complete(
+            LMRequest(prompt=prompt, model=model, output=output, schema=schema_json)
+        )
+        if schema_class is None:
+            print(response.text)
+            return
+        parsed = schema_class.model_validate_json(response.text)
+        print(orjson.dumps(parsed.model_dump(), option=orjson.OPT_INDENT_2).decode())
     finally:
         lm.close()
 

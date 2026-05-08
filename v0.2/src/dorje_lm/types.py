@@ -18,6 +18,7 @@ class LMRequest:
     timeout_s: float = 120.0
     model: str | None = None
     system: str | None = None
+    schema: dict[str, JsonValue] | None = None
 
 
 @dataclass(frozen=True, slots=True)
