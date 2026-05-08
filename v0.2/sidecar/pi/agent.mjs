@@ -72,7 +72,7 @@ function buildSystemPrompt(skillsText) {
   ].join("\n");
 }
 
-function createDorjeTool(toolSpec, cwd) {
+function createDorjeTool(toolSpec, cwd, logResults) {
   return {
     name: toolSpec.name,
     label: toolSpec.name,
@@ -86,7 +86,11 @@ function createDorjeTool(toolSpec, cwd) {
       const argsJson = boundedString(params.args_json, "args_json");
       log("dorje_tool.invoke", { tool: toolSpec.name, args_json: preview(argsJson) });
       const stdout = await runCommand("uv", ["run", "dorje", "tools", "call", toolSpec.name, argsJson], cwd);
-      log("dorje_tool.result", { tool: toolSpec.name, result_chars: stdout.length, result_preview: preview(stdout) });
+      if (logResults) {
+        log("dorje_tool.result", { tool: toolSpec.name, result_chars: stdout.length, result_preview: preview(stdout) });
+      } else {
+        log("dorje_tool.result", { tool: toolSpec.name, result_chars: stdout.length });
+      }
       return {
         content: [{ type: "text", text: stdout }],
         details: { tool: toolSpec.name },
@@ -127,7 +131,8 @@ async function runAgent(request) {
   const cwd = boundedString(request.cwd || process.cwd(), "cwd");
   const skillsText = boundedString(request.skills_text || "", "skills_text");
   const tools = Array.isArray(request.tools) ? request.tools : [];
-  log("run.input", { cwd, query_chars: query.length, skills_chars: skillsText.length, tools: tools.length });
+  const logResults = request.context?.log_results === true;
+  log("run.input", { cwd, query_chars: query.length, skills_chars: skillsText.length, tools: tools.length, log_results: logResults });
 
   const agentDir = getAgentDir();
   log("resource_loader.create", { agentDir });
@@ -142,16 +147,20 @@ async function runAgent(request) {
           return undefined;
         });
         pi.on("tool_result", async (event) => {
-          log("lm.tool_result", {
-            tool: event.toolName,
-            is_error: event.isError,
-            content_preview: preview(event.content),
-          });
+          if (logResults) {
+            log("lm.tool_result", {
+              tool: event.toolName,
+              is_error: event.isError,
+              content_preview: preview(event.content),
+            });
+          } else {
+            log("lm.tool_result", { tool: event.toolName, is_error: event.isError });
+          }
           return undefined;
         });
         for (const toolSpec of tools) {
           if (toolSpec && typeof toolSpec.name === "string") {
-            pi.registerTool(createDorjeTool(toolSpec, cwd));
+            pi.registerTool(createDorjeTool(toolSpec, cwd, logResults));
           }
         }
       },
@@ -187,11 +196,15 @@ async function runAgent(request) {
       toolEvents.push({ type: "start", tool: event.toolName, args: event.args });
     }
     if (event.type === "tool_execution_end") {
-      log("tool.end", {
-        tool: event.toolName,
-        is_error: event.isError,
-        result_preview: preview(event.result),
-      });
+      if (logResults) {
+        log("tool.end", {
+          tool: event.toolName,
+          is_error: event.isError,
+          result_preview: preview(event.result),
+        });
+      } else {
+        log("tool.end", { tool: event.toolName, is_error: event.isError });
+      }
       toolEvents.push({ type: "end", tool: event.toolName, is_error: event.isError });
     }
   });

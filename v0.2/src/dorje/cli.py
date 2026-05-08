@@ -27,6 +27,7 @@ def root(
     ctx: typer.Context,
     query: str | None = typer.Option(None, "-q", "--query", help="Run an agent query."),
     runtime: str = typer.Option("pi", "--runtime", help="Agent runtime: pi or native."),
+    logresults: bool = typer.Option(False, "--logresults", help="Log tool result previews."),
 ) -> None:
     """Dorje command line."""
     if ctx.invoked_subcommand is not None:
@@ -35,7 +36,7 @@ def root(
         return
     agent = create_agent_runtime(AgentRuntimeConfig(kind=_agent_runtime(runtime)))
     try:
-        response = agent.run(AgentRequest(query=query))
+        response = agent.run(AgentRequest(query=query, context={"log_results": logresults}))
         print(response.content)
     finally:
         agent.close()
