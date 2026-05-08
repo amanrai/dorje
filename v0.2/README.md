@@ -1,6 +1,65 @@
 # Dorje v0.2
 
-Fresh Python rebuild focused on a local, CPU-performant SQLite core plus an exploratory agent harness.
+> **DISCLAIMER: This is not for normal use. It has the capability to ruin your system. You own the code if you use this.**
+
+Dorje v0.2 is an exploratory, agent-driven harness. It is intentionally being built to give a language model broad control over skills, tools, code execution, and local project behavior. That is powerful and dangerous.
+
+## Safety / Risk Model
+
+Dorje v0.2 should be treated as **unsafe local automation**.
+
+The agent can already:
+
+- call local Python extension tools
+- fetch external content
+- store local handles under `.dorje/`
+- invoke a Pi-backed model runtime
+- route through prompt-only skills
+- execute lifecycle hook scripts
+- inspect tool outputs and decide what to call next
+
+The project direction explicitly includes letting the agent write and run code. Once enabled, that means Dorje may be able to:
+
+- overwrite files
+- delete files
+- corrupt repositories
+- leak local data through network calls or model prompts
+- execute expensive or long-running computations
+- create broken or malicious extensions
+- modify its own behavior
+- consume API/subscription quota unexpectedly
+- generate code you do not understand
+- persist data in `.dorje/` or other writable paths
+
+### This is not a security sandbox
+
+Any local `run_python`-style tool in v0.2 should be considered **trusted execution with your user permissions**. Timeouts, output limits, subprocesses, prompts, or tool descriptions are accident guards, not security boundaries.
+
+A real production security boundary must live outside the agent, for example:
+
+- container or VM isolation
+- no shell access
+- fixed Python/uv environment
+- no package installation
+- explicit read/write mounts
+- disabled or controlled network
+- CPU/memory/time limits
+- separate credentials and secrets policy
+
+The agent itself must not be trusted to enforce policy. The environment must enforce policy.
+
+## What v0.2 Is For
+
+v0.2 is for exploring whether a small set of broad primitives can support a useful agent harness:
+
+- prompt-only skills for behavior
+- Python extension tools for capability
+- typed content handles for avoiding token waste
+- Pi-backed native tool-calling runtime
+- lifecycle hooks for observability
+- local SQLite/search/KB experiments
+
+v0.2 prioritizes functionality and exploration over safe defaults or polished software engineering. Extraction/packaging/strict hardening is a later `v0.3` concern.
 
 ## Runtime stack
 
@@ -37,6 +96,8 @@ uv run pytest
 ```bash
 uv run dorje version
 uv run dorje doctor
+uv run dorje -q "Tell me about the battle of cannae from wikipedia"
+uv run dorje --logresults -q "Tell me about sqlite from wikipedia"
 ```
 
 ## Extension/tool commands
@@ -46,6 +107,10 @@ uv run dorje tools list
 uv run dorje tools call echo '{"value":"hello"}'
 uv run dorje tools call add '{"a":2,"b":5}'
 uv run dorje tools call get_from_wikipedia '{"title":"Battle of Cannae"}'
+uv run dorje tools call store_handle '{"content":"# Hello","content_type":"text/markdown","label":"demo"}'
+uv run dorje tools call read_handle '{"handle":"h_..."}'
+uv run dorje tools call chunk_md '{"markdown":"# Title\n\nFirst paragraph.","max_chars":1000}'
+uv run dorje tools call chunk_md_handle '{"handle":"h_...","max_chars":2000}'
 ```
 
 Extension discovery order:
@@ -60,6 +125,7 @@ Extension discovery order:
 
 ```bash
 uv run dorje skills list
+uv run dorje skills show fetch_wikipedia_page
 uv run dorje skills show summarize_wikipedia_page
 ```
 
