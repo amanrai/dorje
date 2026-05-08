@@ -26,6 +26,7 @@ class PiAgentRuntime:
             "query": request.query,
             "cwd": str(Path.cwd()),
             "model": self._model,
+            "skill_names": [skill.name for skill in requested_skills],
             "skills_text": _format_skills(requested_skills),
             "tools": [
                 {

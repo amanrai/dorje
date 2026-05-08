@@ -79,15 +79,15 @@ function buildSystemPrompt(skillsText) {
 
 async function runHook(name, payload = {}) {
   const hookPath = path.join(HOOK_DIR, `${name}.mjs`);
-  log("hook.start", { hook: name });
+  log("hook.start", { hook: name, payload });
   try {
     const stdout = await runCommand("node", [hookPath], PROJECT_ROOT, {
       DORJE_HOOK_NAME: name,
       DORJE_HOOK_PAYLOAD: JSON.stringify(payload),
     });
-    log("hook.end", { hook: name, output: preview(stdout) });
+    log("hook.end", { hook: name, payload, output: preview(stdout) });
   } catch (error) {
-    log("hook.error", { hook: name, error: error instanceof Error ? error.message : String(error) });
+    log("hook.error", { hook: name, payload, error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
 }
@@ -155,6 +155,7 @@ async function runAgent(request) {
   const cwd = boundedString(request.cwd || process.cwd(), "cwd");
   const skillsText = boundedString(request.skills_text || "", "skills_text");
   const tools = Array.isArray(request.tools) ? request.tools : [];
+  const skillNames = Array.isArray(request.skill_names) ? request.skill_names : [];
   const logResults = request.context?.log_results === true;
   log("run.input", { cwd, query_chars: query.length, skills_chars: skillsText.length, tools: tools.length, log_results: logResults });
 
@@ -236,11 +237,11 @@ async function runAgent(request) {
   });
 
   try {
-    await runHook("pre_skill_use", { query, skills_chars: skillsText.length });
+    await runHook("pre_skill_use", { query, skills_chars: skillsText.length, skills: skillNames });
     log("prompt.start");
     await created.session.prompt(query, { expandPromptTemplates: false });
     log("prompt.end", { output_chars: textParts.join("").length });
-    await runHook("post_skill_use", { output_chars: textParts.join("").length });
+    await runHook("post_skill_use", { output_chars: textParts.join("").length, skills: skillNames });
     const model = created.session.model;
     return {
       ok: true,
