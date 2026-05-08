@@ -1,0 +1,5 @@
+name: get_from_wikipedia
+description: Fetch a Wikipedia page and return Markdown.
+version: 0.1.0
+tools:
+  - get_from_wikipedia

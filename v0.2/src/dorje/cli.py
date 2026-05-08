@@ -62,6 +62,9 @@ def tools_call(name: str, args_json: str = typer.Argument("{}")) -> None:
         raise typer.BadParameter("args_json must decode to an object")
     registry = load_extensions()
     result = registry.call(name, decoded)
+    if isinstance(result, str):
+        print(result)
+        return
     print(orjson.dumps(result, option=orjson.OPT_INDENT_2).decode())
 
 
