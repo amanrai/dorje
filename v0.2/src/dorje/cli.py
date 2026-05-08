@@ -6,12 +6,15 @@ from rich import print
 
 from dorje import __version__
 from dorje.db import connect, init_schema
+from dorje.extensions import load_extensions
 from dorje_lm import LMConfig, LMRequest, create_lm_provider
 from dorje_lm.ResponseSchemas import get_response_schema, list_response_schemas
 
 app = typer.Typer(no_args_is_help=True)
 lm_app = typer.Typer(no_args_is_help=True)
+tools_app = typer.Typer(no_args_is_help=True)
 app.add_typer(lm_app, name="lm")
+app.add_typer(tools_app, name="tools")
 
 
 @app.command()
@@ -41,6 +44,25 @@ def doctor() -> None:
     print(f"SQLite: {sqlite_version}")
     print(f"FTS5: {'yes' if fts_ok else 'no'}")
     print(f"sqlite-vec: {vec_version}")
+
+
+@tools_app.command("list")
+def tools_list() -> None:
+    """List discovered extension tools."""
+    registry = load_extensions()
+    for spec in registry.list():
+        print(f"{spec.name}\t{spec.extension_name}\t{spec.description.strip()}")
+
+
+@tools_app.command("call")
+def tools_call(name: str, args_json: str = typer.Argument("{}")) -> None:
+    """Call a discovered extension tool with JSON args."""
+    decoded = orjson.loads(args_json)
+    if not isinstance(decoded, dict):
+        raise typer.BadParameter("args_json must decode to an object")
+    registry = load_extensions()
+    result = registry.call(name, decoded)
+    print(orjson.dumps(result, option=orjson.OPT_INDENT_2).decode())
 
 
 @lm_app.command("health")
