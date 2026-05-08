@@ -183,6 +183,12 @@ async function runAgent(request) {
     extensionFactories: [
       (pi) => {
         pi.on("tool_call", async (event) => {
+          if (currentTurn !== null) {
+            currentTurn.tool_calls.push({
+              tool: event.toolName,
+              input: event.input,
+            });
+          }
           log("lm.tool_call", { tool: event.toolName, input: event.input });
           await runHook("pre_tool_call", { tool: event.toolName, input: event.input });
           return undefined;
@@ -229,15 +235,49 @@ async function runAgent(request) {
   log("session.created", { model: created.session.model ? `${created.session.model.provider}/${created.session.model.id}` : null });
   const textParts = [];
   const toolEvents = [];
+  let currentTurn = null;
+  let previousTurnTools = [];
+  let localTurnIndex = 0;
   const unsubscribe = created.session.subscribe((event) => {
+    if (event.type === "turn_start") {
+      const turnIndex = typeof event.turnIndex === "number" ? event.turnIndex : localTurnIndex;
+      localTurnIndex += 1;
+      const reason = turnIndex === 0 ? "initial_user_query" : "after_tool_result";
+      currentTurn = {
+        turn_index: turnIndex,
+        reason,
+        active_skills: skillNames,
+        available_tools: toolNames,
+        previous_tools: previousTurnTools,
+        tool_calls: [],
+        text_chars: 0,
+      };
+      log("lm.turn.start", currentTurn);
+    }
     if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
       textParts.push(event.assistantMessageEvent.delta);
+      if (currentTurn !== null) {
+        currentTurn.text_chars += event.assistantMessageEvent.delta.length;
+      }
     }
     if (event.type === "turn_end") {
-      log("turn.end", { turn_index: event.turnIndex, tokens: tokenUsage(event.message) });
+      const usage = tokenUsage(event.message);
+      const toolNamesThisTurn = currentTurn === null ? [] : currentTurn.tool_calls.map((call) => call.tool);
+      const did = toolNamesThisTurn.length > 0 ? "tool_call" : "final_answer";
+      log("lm.turn.end", {
+        turn_index: currentTurn?.turn_index ?? event.turnIndex,
+        reason: currentTurn?.reason ?? "unknown",
+        did,
+        tools: toolNamesThisTurn,
+        text_chars: currentTurn?.text_chars ?? 0,
+        stop_reason: event.message?.stopReason,
+        tokens: usage,
+      });
+      previousTurnTools = toolNamesThisTurn;
+      currentTurn = null;
     }
     if (event.type === "message_end" && event.message?.role === "assistant") {
-      log("message.end", { role: event.message.role, tokens: tokenUsage(event.message) });
+      log("lm.message.end", { role: event.message.role, stop_reason: event.message.stopReason, tokens: tokenUsage(event.message) });
     }
     if (event.type === "tool_execution_start") {
       log("tool.start", { tool: event.toolName, args: event.args });
