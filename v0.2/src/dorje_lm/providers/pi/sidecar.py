@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import threading
 from collections.abc import Sequence
 from pathlib import Path
@@ -19,6 +20,7 @@ class SidecarProcess:
         if len(command) == 0:
             raise LMSidecarError("sidecar command is empty")
         self._lock = threading.Lock()
+        self._stderr_thread: threading.Thread | None = None
         self._process = subprocess.Popen(
             list(command),
             cwd=str(cwd) if cwd is not None else None,
@@ -28,6 +30,7 @@ class SidecarProcess:
             text=True,
             bufsize=1,
         )
+        self._start_stderr_forwarder()
 
     def request(self, payload: dict[str, Any], timeout_s: float) -> dict[str, Any]:
         if timeout_s <= 0.0:
@@ -98,8 +101,18 @@ class SidecarProcess:
             raise LMSidecarError("sidecar stdout read failed") from error[0]
         return result[0] if result else ""
 
-    def _read_stderr_tail(self) -> str:
+    def _start_stderr_forwarder(self) -> None:
         process = self._process
-        if process.stderr is None:
-            return ""
-        return process.stderr.read(4096)
+        stderr = process.stderr
+        if stderr is None:
+            return
+
+        def forward() -> None:
+            for line in stderr:
+                sys.stderr.write(line)
+
+        self._stderr_thread = threading.Thread(target=forward, daemon=True)
+        self._stderr_thread.start()
+
+    def _read_stderr_tail(self) -> str:
+        return ""

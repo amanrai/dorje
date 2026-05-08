@@ -5,11 +5,13 @@ import typer
 from rich import print
 
 from dorje import __version__
+from dorje.agent_runtime import AgentRequest, AgentRuntimeConfig, create_agent_runtime
 from dorje.db import connect, init_schema
 from dorje.extensions import load_extensions
 from dorje.skills import load_skills
 from dorje_lm import LMConfig, LMRequest, create_lm_provider
 from dorje_lm.ResponseSchemas import get_response_schema, list_response_schemas
+from dorje.agent_runtime.types import AgentRuntimeKind
 
 app = typer.Typer(no_args_is_help=True)
 lm_app = typer.Typer(no_args_is_help=True)
@@ -18,6 +20,25 @@ skills_app = typer.Typer(no_args_is_help=True)
 app.add_typer(lm_app, name="lm")
 app.add_typer(tools_app, name="tools")
 app.add_typer(skills_app, name="skills")
+
+
+@app.callback(invoke_without_command=True)
+def root(
+    ctx: typer.Context,
+    query: str | None = typer.Option(None, "-q", "--query", help="Run an agent query."),
+    runtime: str = typer.Option("pi", "--runtime", help="Agent runtime: pi or native."),
+) -> None:
+    """Dorje command line."""
+    if ctx.invoked_subcommand is not None:
+        return
+    if query is None:
+        return
+    agent = create_agent_runtime(AgentRuntimeConfig(kind=_agent_runtime(runtime)))
+    try:
+        response = agent.run(AgentRequest(query=query))
+        print(response.content)
+    finally:
+        agent.close()
 
 
 @app.command()
@@ -128,6 +149,12 @@ def lm_complete(
         print(orjson.dumps(parsed.model_dump(), option=orjson.OPT_INDENT_2).decode())
     finally:
         lm.close()
+
+
+def _agent_runtime(value: str) -> AgentRuntimeKind:
+    if value == "pi" or value == "native":
+        return value
+    raise typer.BadParameter("runtime must be pi or native")
 
 
 def _lm_provider(value: str) -> Literal["echo", "pi"]:
