@@ -45,6 +45,21 @@ function preview(value, maxChars = 2000) {
   return `${text.slice(0, maxChars)}...<truncated ${text.length - maxChars} chars>`;
 }
 
+function tokenUsage(value) {
+  const usage = value?.usage;
+  if (!usage) {
+    return null;
+  }
+  return {
+    input: usage.input,
+    output: usage.output,
+    cache_read: usage.cacheRead,
+    cache_write: usage.cacheWrite,
+    total: usage.totalTokens,
+    cost_total: usage.cost?.total,
+  };
+}
+
 function boundedString(value, name) {
   if (typeof value !== "string") {
     throw new Error(`${name} must be a string`);
@@ -218,6 +233,12 @@ async function runAgent(request) {
     if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
       textParts.push(event.assistantMessageEvent.delta);
     }
+    if (event.type === "turn_end") {
+      log("turn.end", { turn_index: event.turnIndex, tokens: tokenUsage(event.message) });
+    }
+    if (event.type === "message_end" && event.message?.role === "assistant") {
+      log("message.end", { role: event.message.role, tokens: tokenUsage(event.message) });
+    }
     if (event.type === "tool_execution_start") {
       log("tool.start", { tool: event.toolName, args: event.args });
       toolEvents.push({ type: "start", tool: event.toolName, args: event.args });
@@ -242,6 +263,8 @@ async function runAgent(request) {
     await created.session.prompt(query, { expandPromptTemplates: false });
     log("prompt.end", { output_chars: textParts.join("").length });
     await runHook("post_skill_use", { output_chars: textParts.join("").length, skills: skillNames });
+    const stats = created.session.getSessionStats();
+    log("session.stats", { tokens: stats.tokens, cost: stats.cost, context_usage: stats.contextUsage });
     const model = created.session.model;
     return {
       ok: true,
@@ -249,6 +272,8 @@ async function runAgent(request) {
       provider: model?.provider ?? "pi",
       model: model ? `${model.provider}/${model.id}` : null,
       tool_events: toolEvents,
+      tokens: stats.tokens,
+      cost: stats.cost,
     };
   } finally {
     unsubscribe();
