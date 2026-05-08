@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import readline from "node:readline";
@@ -165,17 +166,19 @@ function runCommand(command, args, cwd, extraEnv = {}) {
 }
 
 async function runAgent(request) {
-  log("run.start");
+  const runId = `run_${crypto.randomUUID()}`;
+  const skillUseId = `skill_${crypto.randomUUID()}`;
+  log("run.start", { run_id: runId });
   const query = boundedString(request.query, "query");
   const cwd = boundedString(request.cwd || process.cwd(), "cwd");
   const skillsText = boundedString(request.skills_text || "", "skills_text");
   const tools = Array.isArray(request.tools) ? request.tools : [];
   const skillNames = Array.isArray(request.skill_names) ? request.skill_names : [];
   const logResults = request.context?.log_results === true;
-  log("run.input", { cwd, query_chars: query.length, skills_chars: skillsText.length, tools: tools.length, log_results: logResults });
+  log("run.input", { run_id: runId, cwd, query_chars: query.length, skills_chars: skillsText.length, tools: tools.length, log_results: logResults });
 
   const agentDir = getAgentDir();
-  log("resource_loader.create", { agentDir });
+  log("resource_loader.create", { run_id: runId, agentDir });
   const resourceLoader = new DefaultResourceLoader({
     cwd,
     agentDir,
@@ -183,27 +186,33 @@ async function runAgent(request) {
     extensionFactories: [
       (pi) => {
         pi.on("tool_call", async (event) => {
+          const toolCallId = typeof event.toolCallId === "string" ? event.toolCallId : `tool_${localToolCallIndex}`;
+          localToolCallIndex += 1;
           if (currentTurn !== null) {
             currentTurn.tool_calls.push({
+              tool_call_id: toolCallId,
               tool: event.toolName,
               input: event.input,
             });
           }
-          log("lm.tool_call", { tool: event.toolName, input: event.input });
-          await runHook("pre_tool_call", { tool: event.toolName, input: event.input });
+          log("lm.tool_call", { run_id: runId, turn_id: currentTurn?.turn_id ?? null, tool_call_id: toolCallId, tool: event.toolName, input: event.input });
+          await runHook("pre_tool_call", { run_id: runId, turn_id: currentTurn?.turn_id ?? null, tool_call_id: toolCallId, tool: event.toolName, input: event.input });
           return undefined;
         });
         pi.on("tool_result", async (event) => {
           if (logResults) {
             log("lm.tool_result", {
+              run_id: runId,
+              turn_id: currentTurn?.turn_id ?? null,
+              tool_call_id: event.toolCallId,
               tool: event.toolName,
               is_error: event.isError,
               content_preview: preview(event.content),
             });
           } else {
-            log("lm.tool_result", { tool: event.toolName, is_error: event.isError });
+            log("lm.tool_result", { run_id: runId, turn_id: currentTurn?.turn_id ?? null, tool_call_id: event.toolCallId, tool: event.toolName, is_error: event.isError });
           }
-          await runHook("post_tool_call", { tool: event.toolName, is_error: event.isError });
+          await runHook("post_tool_call", { run_id: runId, turn_id: currentTurn?.turn_id ?? null, tool_call_id: event.toolCallId, tool: event.toolName, is_error: event.isError });
           return undefined;
         });
         for (const toolSpec of tools) {
@@ -215,12 +224,12 @@ async function runAgent(request) {
     ],
   });
   await resourceLoader.reload();
-  log("resource_loader.loaded");
+  log("resource_loader.loaded", { run_id: runId });
 
   const authStorage = AuthStorage.create();
   const modelRegistry = ModelRegistry.create(authStorage);
   const toolNames = tools.map((toolSpec) => toolSpec.name).filter((name) => typeof name === "string");
-  log("session.create", { toolNames });
+  log("session.create", { run_id: runId, toolNames });
   const options = {
     cwd,
     agentDir,
@@ -232,18 +241,21 @@ async function runAgent(request) {
   };
 
   const created = await createAgentSession(options);
-  log("session.created", { model: created.session.model ? `${created.session.model.provider}/${created.session.model.id}` : null });
+  log("session.created", { run_id: runId, model: created.session.model ? `${created.session.model.provider}/${created.session.model.id}` : null });
   const textParts = [];
   const toolEvents = [];
   let currentTurn = null;
   let previousTurnTools = [];
   let localTurnIndex = 0;
+  let localToolCallIndex = 0;
   const unsubscribe = created.session.subscribe((event) => {
     if (event.type === "turn_start") {
       const turnIndex = typeof event.turnIndex === "number" ? event.turnIndex : localTurnIndex;
       localTurnIndex += 1;
       const reason = turnIndex === 0 ? "initial_user_query" : "after_tool_result";
       currentTurn = {
+        run_id: runId,
+        turn_id: `turn_${turnIndex}`,
         turn_index: turnIndex,
         reason,
         active_skills: skillNames,
@@ -265,6 +277,8 @@ async function runAgent(request) {
       const toolNamesThisTurn = currentTurn === null ? [] : currentTurn.tool_calls.map((call) => call.tool);
       const did = toolNamesThisTurn.length > 0 ? "tool_call" : "final_answer";
       log("lm.turn.end", {
+        run_id: runId,
+        turn_id: currentTurn?.turn_id ?? null,
         turn_index: currentTurn?.turn_index ?? event.turnIndex,
         reason: currentTurn?.reason ?? "unknown",
         did,
@@ -277,37 +291,42 @@ async function runAgent(request) {
       currentTurn = null;
     }
     if (event.type === "message_end" && event.message?.role === "assistant") {
-      log("lm.message.end", { role: event.message.role, stop_reason: event.message.stopReason, tokens: tokenUsage(event.message) });
+      log("lm.message.end", { run_id: runId, turn_id: currentTurn?.turn_id ?? null, role: event.message.role, stop_reason: event.message.stopReason, tokens: tokenUsage(event.message) });
     }
     if (event.type === "tool_execution_start") {
-      log("tool.start", { tool: event.toolName, args: event.args });
+      log("tool.start", { run_id: runId, turn_id: currentTurn?.turn_id ?? null, tool_call_id: event.toolCallId, tool: event.toolName, args: event.args });
       toolEvents.push({ type: "start", tool: event.toolName, args: event.args });
     }
     if (event.type === "tool_execution_end") {
       if (logResults) {
         log("tool.end", {
+          run_id: runId,
+          turn_id: currentTurn?.turn_id ?? null,
+          tool_call_id: event.toolCallId,
           tool: event.toolName,
           is_error: event.isError,
           result_preview: preview(event.result),
         });
       } else {
-        log("tool.end", { tool: event.toolName, is_error: event.isError });
+        log("tool.end", { run_id: runId, turn_id: currentTurn?.turn_id ?? null, tool_call_id: event.toolCallId, tool: event.toolName, is_error: event.isError });
       }
       toolEvents.push({ type: "end", tool: event.toolName, is_error: event.isError });
     }
   });
 
   try {
-    await runHook("pre_skill_use", { query, skills_chars: skillsText.length, skills: skillNames });
-    log("prompt.start");
+    await runHook("pre_skill_use", { run_id: runId, skill_use_id: skillUseId, query, skills_chars: skillsText.length, skills: skillNames });
+    log("prompt.start", { run_id: runId, skill_use_id: skillUseId });
     await created.session.prompt(query, { expandPromptTemplates: false });
-    log("prompt.end", { output_chars: textParts.join("").length });
-    await runHook("post_skill_use", { output_chars: textParts.join("").length, skills: skillNames });
+    log("prompt.end", { run_id: runId, skill_use_id: skillUseId, output_chars: textParts.join("").length });
+    await runHook("post_skill_use", { run_id: runId, skill_use_id: skillUseId, output_chars: textParts.join("").length, skills: skillNames });
     const stats = created.session.getSessionStats();
-    log("session.stats", { tokens: stats.tokens, cost: stats.cost, context_usage: stats.contextUsage });
+    log("session.stats", { run_id: runId, tokens: stats.tokens, cost: stats.cost, context_usage: stats.contextUsage });
     const model = created.session.model;
     return {
       ok: true,
+      run_id: runId,
+      skill_use_id: skillUseId,
       content: textParts.join(""),
       provider: model?.provider ?? "pi",
       model: model ? `${model.provider}/${model.id}` : null,
