@@ -2,7 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Sequence
+
 from dorje.handles import HandleStore
+
+
+def iter_handles(handles: Sequence[str]) -> Iterator[str]:
+    """Yield handle ids from a sequence.
+
+    Use this inside run_python when code needs to process many handles:
+
+        for handle in iter_handles(handles):
+            ...
+    """
+    for handle in handles:
+        if not isinstance(handle, str):
+            raise TypeError("handles must contain only strings")
+        yield handle
 
 
 def read_handle(handle: str, max_chars: int | None = None) -> dict[str, object]:
@@ -52,10 +68,15 @@ Do not call tools like `read_handle` into the LM conversation just so Python can
 process the text. Pass the handle to Python and read it there.
 
 ```python
-from dorje_helpers import read_handle, write_handle, store_handle
+from dorje_helpers import iter_handles, read_handle, write_handle, store_handle
 
 record = read_handle("h_...")
 text = record["content"]
+
+for handle in iter_handles(["h_...", "h_..."]):
+    record = read_handle(handle)
+    text = record["content"]
+    # process handle content
 
 new_record = write_handle(
     "computed output",
@@ -66,6 +87,17 @@ print(new_record["handle"])
 ```
 
 ## Functions
+
+### iter_handles(handles: Sequence[str]) -> Iterator[str]
+
+Yields handle ids from a sequence. Use this when code needs to process many
+handles one by one, for example:
+
+```python
+for handle in iter_handles(handles):
+    record = read_handle(handle)
+    # vectorize(handle), summarize(handle), etc.
+```
 
 ### read_handle(handle: str, max_chars: int | None = None) -> dict
 
@@ -103,4 +135,4 @@ def docs() -> str:
     return DORJE_HELPERS_DOCS
 
 
-__all__ = ["docs", "read_handle", "store_handle", "write_handle"]
+__all__ = ["docs", "iter_handles", "read_handle", "store_handle", "write_handle"]
