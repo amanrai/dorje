@@ -1,0 +1,3 @@
+name: summarize_wikipedia_page
+description: Summarize a Wikipedia page into concise, grounded Markdown.
+version: 0.1.0
