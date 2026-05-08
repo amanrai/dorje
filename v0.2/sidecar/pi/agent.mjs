@@ -23,10 +23,10 @@ let lastLogAtMs = processStartedAtMs;
 function log(message, details = undefined) {
   const nowMs = Date.now();
   const elapsedS = ((nowMs - processStartedAtMs) / 1000).toFixed(3);
-  const stepS = ((nowMs - lastLogAtMs) / 1000).toFixed(3);
+  const stepMs = nowMs - lastLogAtMs;
   lastLogAtMs = nowMs;
   const payload = details === undefined ? "" : ` ${JSON.stringify(details)}`;
-  process.stderr.write(`[dorje-pi-agent +${elapsedS}s Δ${stepS}s] ${message}${payload}\n`);
+  process.stderr.write(`[dorje-pi-agent +${elapsedS}s Δ${stepMs}ms] ${message}${payload}\n`);
 }
 
 function writeJson(value) {
