@@ -1,10 +1,15 @@
+from typing import Literal
+
 import typer
 from rich import print
 
 from dorje import __version__
 from dorje.db import connect, init_schema
+from dorje_lm import LMConfig, LMRequest, create_lm_provider
 
 app = typer.Typer(no_args_is_help=True)
+lm_app = typer.Typer(no_args_is_help=True)
+app.add_typer(lm_app, name="lm")
 
 
 @app.command()
@@ -34,6 +39,34 @@ def doctor() -> None:
     print(f"SQLite: {sqlite_version}")
     print(f"FTS5: {'yes' if fts_ok else 'no'}")
     print(f"sqlite-vec: {vec_version}")
+
+
+@lm_app.command("health")
+def lm_health(provider: str = "echo", model: str | None = None) -> None:
+    """Check an LM provider."""
+    lm = create_lm_provider(LMConfig(provider=_lm_provider(provider), model=model))
+    try:
+        health = lm.health()
+        print(health)
+    finally:
+        lm.close()
+
+
+@lm_app.command("complete")
+def lm_complete(prompt: str, provider: str = "echo", model: str | None = None) -> None:
+    """Run one LM completion."""
+    lm = create_lm_provider(LMConfig(provider=_lm_provider(provider), model=model))
+    try:
+        response = lm.complete(LMRequest(prompt=prompt, model=model))
+        print(response.text)
+    finally:
+        lm.close()
+
+
+def _lm_provider(value: str) -> Literal["echo", "pi"]:
+    if value == "echo" or value == "pi":
+        return value
+    raise typer.BadParameter("provider must be echo or pi")
 
 
 def main() -> None:
