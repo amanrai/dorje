@@ -1,0 +1,5 @@
+name: run_python
+description: Execute arbitrary local Python code. Unsafe trusted execution.
+version: 0.1.0
+tools:
+  - run_python
