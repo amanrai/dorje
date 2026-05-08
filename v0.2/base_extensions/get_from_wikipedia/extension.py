@@ -9,6 +9,7 @@ import urllib.request
 from typing import Any
 
 import certifi
+from dorje.handles import HandleStore
 from dorje_sdk import tool
 
 API_URL = "https://en.wikipedia.org/w/api.php"
@@ -16,12 +17,25 @@ HTTP_TIMEOUT_S = 30.0
 MAX_TITLE_CHARS = 200
 
 
-@tool(description="Fetch a Wikipedia page by title and return Markdown text.")
-def get_from_wikipedia(title: str) -> str:
-    """Return a Wikipedia page as Markdown."""
+@tool(description="Fetch a Wikipedia page by title, store it as Markdown, and return a content handle.")
+def get_from_wikipedia(title: str) -> dict[str, object]:
+    """Return a typed Markdown handle for a Wikipedia page."""
     clean_title = _clean_title(title)
     page = _fetch_page(clean_title)
-    return _to_markdown(page)
+    markdown = _to_markdown(page)
+    record = HandleStore().put(
+        content=markdown,
+        content_type="text/markdown",
+        label=str(page.get("title", clean_title)),
+    )
+    return {
+        "handle": record.handle,
+        "content_type": record.content_type,
+        "label": record.label,
+        "sha256": record.sha256,
+        "char_count": len(record.content),
+        "preview": record.content[:1000],
+    }
 
 
 def _fetch_page(title: str) -> dict[str, Any]:

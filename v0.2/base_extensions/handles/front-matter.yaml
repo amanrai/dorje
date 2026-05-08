@@ -1,0 +1,6 @@
+name: handles
+description: Store and read typed text content handles.
+version: 0.1.0
+tools:
+  - store_handle
+  - read_handle

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 
+from dorje.handles import HandleStore
 from dorje_sdk import tool
 
 DEFAULT_MAX_CHARS = 2000
@@ -59,6 +60,43 @@ def chunk_md(
             index = max(start + 1, index - overlap_paragraphs)
 
     return chunks
+
+
+@tool(description="Chunk a Markdown/plaintext handle into paragraph-aligned chunk handles.")
+def chunk_md_handle(
+    handle: str,
+    max_chars: int = DEFAULT_MAX_CHARS,
+    overlap_paragraphs: int = DEFAULT_OVERLAP_PARAGRAPHS,
+) -> list[dict[str, object]]:
+    """Return paragraph-aligned chunk handles for a stored Markdown/plaintext handle."""
+    store = HandleStore()
+    record = store.get(handle)
+    if record.content_type not in ("text/markdown", "text/plain"):
+        raise ValueError("chunk_md_handle only supports text/markdown or text/plain handles")
+    chunks = chunk_md(record.content, max_chars=max_chars, overlap_paragraphs=overlap_paragraphs)
+    output: list[dict[str, object]] = []
+    for item in chunks:
+        chunk_text = item["chunk"]
+        if not isinstance(chunk_text, str):
+            raise TypeError("chunk text must be a string")
+        chunk_record = store.put(
+            content=chunk_text,
+            content_type=record.content_type,
+            label=f"{record.label} chunk {len(output) + 1}",
+        )
+        output.append(
+            {
+                "id": item["id"],
+                "handle": chunk_record.handle,
+                "content_type": chunk_record.content_type,
+                "label": chunk_record.label,
+                "start_paragraph": item["start_paragraph"],
+                "end_paragraph": item["end_paragraph"],
+                "char_count": item["char_count"],
+                "preview": chunk_text[:500],
+            }
+        )
+    return output
 
 
 def _validate(markdown: str, max_chars: int, overlap_paragraphs: int) -> None:
