@@ -18,6 +18,7 @@ def default_extension_roots(cwd: Path | None = None, home: Path | None = None) -
     resolved_cwd = cwd if cwd is not None else Path.cwd()
     resolved_home = home if home is not None else Path.home()
     return (
+        resolved_cwd / "base_extensions",
         resolved_cwd / ".dorje" / "extensions",
         resolved_home / ".dorje" / "extensions",
     )

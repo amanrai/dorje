@@ -1,6 +1,12 @@
 from pathlib import Path
 
-from dorje.extensions import load_extensions
+from dorje.extensions import default_extension_roots, load_extensions
+
+
+def test_default_roots_include_base_extensions(tmp_path: Path) -> None:
+    roots = default_extension_roots(cwd=tmp_path, home=tmp_path / "home")
+
+    assert roots[0] == tmp_path / "base_extensions"
 
 
 def test_builtin_tools() -> None:
