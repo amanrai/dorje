@@ -112,14 +112,39 @@ async function runHook(name, payload = {}) {
       DORJE_HOOK_NAME: name,
       DORJE_HOOK_PAYLOAD: JSON.stringify(payload),
     });
-    log("hook.end", { hook: name, payload, output_chars: stdout.length });
+    const control = parseHookControl(stdout);
+    log("hook.end", { hook: name, payload, output_chars: stdout.length, control });
     if (stdout.length > 0) {
       process.stderr.write(`[dorje-pi-agent hook.output ${name}]\n${stdout}\n`);
     }
+    if (control.force_stop) {
+      const reason = control.reason || `${name} requested force_stop`;
+      log("hook.force_stop", { hook: name, payload, reason });
+      throw new Error(reason);
+    }
+    return control;
   } catch (error) {
     log("hook.error", { hook: name, payload, error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
+}
+
+function parseHookControl(stdout) {
+  const lines = stdout.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    try {
+      const parsed = JSON.parse(lines[index]);
+      if (parsed && typeof parsed === "object" && typeof parsed.force_stop === "boolean") {
+        return {
+          force_stop: parsed.force_stop,
+          reason: typeof parsed.reason === "string" ? parsed.reason : null,
+        };
+      }
+    } catch (_error) {
+      // Ignore non-JSON hook output lines.
+    }
+  }
+  return { force_stop: false, reason: null };
 }
 
 function createDorjeTool(toolSpec, cwd, logResults) {
