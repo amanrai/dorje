@@ -177,6 +177,7 @@ function runCommand(command, args, cwd, extraEnv = {}) {
 }
 
 async function runAgent(request) {
+  const agentRunStartedAtMs = Date.now();
   const runId = `run_${crypto.randomUUID()}`;
   const skillUseId = `skill_${crypto.randomUUID()}`;
   log("run.start", { run_id: runId });
@@ -326,13 +327,31 @@ async function runAgent(request) {
   });
 
   try {
+    await runHook("start_agent", {
+      run_id: runId,
+      skill_use_id: skillUseId,
+      query,
+      skills: skillNames,
+      tools: toolNames,
+    });
     await runHook("pre_skill_use", { run_id: runId, skill_use_id: skillUseId, query, skills_chars: skillsText.length, skills: skillNames });
     log("prompt.start", { run_id: runId, skill_use_id: skillUseId });
     await created.session.prompt(query, { expandPromptTemplates: false });
     log("prompt.end", { run_id: runId, skill_use_id: skillUseId, output_chars: textParts.join("").length });
     await runHook("post_skill_use", { run_id: runId, skill_use_id: skillUseId, output_chars: textParts.join("").length, skills: skillNames });
     const stats = created.session.getSessionStats();
-    log("session.stats", { run_id: runId, tokens: stats.tokens, cost: stats.cost, context_usage: stats.contextUsage });
+    const durationMs = Date.now() - agentRunStartedAtMs;
+    const summary = {
+      run_id: runId,
+      skill_use_id: skillUseId,
+      duration_ms: durationMs,
+      turns: localTurnIndex,
+      tokens: stats.tokens,
+      cost: stats.cost,
+      context_usage: stats.contextUsage,
+    };
+    log("session.stats", summary);
+    await runHook("end_agent", summary);
     const model = created.session.model;
     return {
       ok: true,
