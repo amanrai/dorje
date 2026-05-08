@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
+import path from "node:path";
 import readline from "node:readline";
+import { fileURLToPath } from "node:url";
 import { Type } from "@mariozechner/pi-ai";
 import {
   AuthStorage,
@@ -11,6 +13,9 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 const MAX_TEXT_CHARS = 1_000_000;
+const SIDECAR_DIR = path.dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = path.resolve(SIDECAR_DIR, "../..");
+const HOOK_DIR = path.join(PROJECT_ROOT, "hooks");
 
 const processStartedAtMs = Date.now();
 let lastLogAtMs = processStartedAtMs;
@@ -72,6 +77,21 @@ function buildSystemPrompt(skillsText) {
   ].join("\n");
 }
 
+async function runHook(name, payload = {}) {
+  const hookPath = path.join(HOOK_DIR, `${name}.mjs`);
+  log("hook.start", { hook: name });
+  try {
+    const stdout = await runCommand("node", [hookPath], PROJECT_ROOT, {
+      DORJE_HOOK_NAME: name,
+      DORJE_HOOK_PAYLOAD: JSON.stringify(payload),
+    });
+    log("hook.end", { hook: name, output: preview(stdout) });
+  } catch (error) {
+    log("hook.error", { hook: name, error: error instanceof Error ? error.message : String(error) });
+    throw error;
+  }
+}
+
 function createDorjeTool(toolSpec, cwd, logResults) {
   return {
     name: toolSpec.name,
@@ -99,9 +119,13 @@ function createDorjeTool(toolSpec, cwd, logResults) {
   };
 }
 
-function runCommand(command, args, cwd) {
+function runCommand(command, args, cwd, extraEnv = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, {
+      cwd,
+      env: { ...process.env, ...extraEnv },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => {
@@ -144,6 +168,7 @@ async function runAgent(request) {
       (pi) => {
         pi.on("tool_call", async (event) => {
           log("lm.tool_call", { tool: event.toolName, input: event.input });
+          await runHook("pre_tool_call", { tool: event.toolName, input: event.input });
           return undefined;
         });
         pi.on("tool_result", async (event) => {
@@ -156,6 +181,7 @@ async function runAgent(request) {
           } else {
             log("lm.tool_result", { tool: event.toolName, is_error: event.isError });
           }
+          await runHook("post_tool_call", { tool: event.toolName, is_error: event.isError });
           return undefined;
         });
         for (const toolSpec of tools) {
@@ -210,9 +236,11 @@ async function runAgent(request) {
   });
 
   try {
+    await runHook("pre_skill_use", { query, skills_chars: skillsText.length });
     log("prompt.start");
     await created.session.prompt(query, { expandPromptTemplates: false });
     log("prompt.end", { output_chars: textParts.join("").length });
+    await runHook("post_skill_use", { output_chars: textParts.join("").length });
     const model = created.session.model;
     return {
       ok: true,
