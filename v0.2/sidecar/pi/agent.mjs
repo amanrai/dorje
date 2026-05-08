@@ -32,6 +32,14 @@ function fail(message) {
   return { ok: false, error: String(message) };
 }
 
+function preview(value, maxChars = 2000) {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  if (text.length <= maxChars) {
+    return text;
+  }
+  return `${text.slice(0, maxChars)}...<truncated ${text.length - maxChars} chars>`;
+}
+
 function boundedString(value, name) {
   if (typeof value !== "string") {
     throw new Error(`${name} must be a string`);
@@ -76,7 +84,9 @@ function createDorjeTool(toolSpec, cwd) {
     }),
     execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => {
       const argsJson = boundedString(params.args_json, "args_json");
+      log("dorje_tool.invoke", { tool: toolSpec.name, args_json: preview(argsJson) });
       const stdout = await runCommand("uv", ["run", "dorje", "tools", "call", toolSpec.name, argsJson], cwd);
+      log("dorje_tool.result", { tool: toolSpec.name, result_chars: stdout.length, result_preview: preview(stdout) });
       return {
         content: [{ type: "text", text: stdout }],
         details: { tool: toolSpec.name },
@@ -127,6 +137,18 @@ async function runAgent(request) {
     systemPromptOverride: () => buildSystemPrompt(skillsText),
     extensionFactories: [
       (pi) => {
+        pi.on("tool_call", async (event) => {
+          log("lm.tool_call", { tool: event.toolName, input: event.input });
+          return undefined;
+        });
+        pi.on("tool_result", async (event) => {
+          log("lm.tool_result", {
+            tool: event.toolName,
+            is_error: event.isError,
+            content_preview: preview(event.content),
+          });
+          return undefined;
+        });
         for (const toolSpec of tools) {
           if (toolSpec && typeof toolSpec.name === "string") {
             pi.registerTool(createDorjeTool(toolSpec, cwd));
@@ -161,11 +183,15 @@ async function runAgent(request) {
       textParts.push(event.assistantMessageEvent.delta);
     }
     if (event.type === "tool_execution_start") {
-      log("tool.start", { tool: event.toolName });
-      toolEvents.push({ type: "start", tool: event.toolName });
+      log("tool.start", { tool: event.toolName, args: event.args });
+      toolEvents.push({ type: "start", tool: event.toolName, args: event.args });
     }
     if (event.type === "tool_execution_end") {
-      log("tool.end", { tool: event.toolName, is_error: event.isError });
+      log("tool.end", {
+        tool: event.toolName,
+        is_error: event.isError,
+        result_preview: preview(event.result),
+      });
       toolEvents.push({ type: "end", tool: event.toolName, is_error: event.isError });
     }
   });
