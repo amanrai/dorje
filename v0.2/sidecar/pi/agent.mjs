@@ -46,6 +46,23 @@ function preview(value, maxChars = 2000) {
   return `${text.slice(0, maxChars)}...<truncated ${text.length - maxChars} chars>`;
 }
 
+function toolArgLog(toolName, argsJson) {
+  if (toolName !== "run_python") {
+    return { args_json: preview(argsJson) };
+  }
+  try {
+    const parsed = JSON.parse(argsJson);
+    return {
+      args_json: preview(argsJson),
+      code: typeof parsed.code === "string" ? `\n\n${parsed.code}\n` : null,
+      timeout_s: parsed.timeout_s ?? null,
+      cwd: parsed.cwd ?? null,
+    };
+  } catch (_error) {
+    return { args_json: preview(argsJson) };
+  }
+}
+
 function tokenUsage(value) {
   const usage = value?.usage;
   if (!usage) {
@@ -120,7 +137,7 @@ function createDorjeTool(toolSpec, cwd, logResults) {
     }),
     execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => {
       const argsJson = boundedString(params.args_json, "args_json");
-      log("dorje_tool.invoke", { tool: toolSpec.name, args_json: preview(argsJson) });
+      log("dorje_tool.invoke", { tool: toolSpec.name, ...toolArgLog(toolSpec.name, argsJson) });
       const stdout = await runCommand("uv", ["run", "dorje", "tools", "call", toolSpec.name, argsJson], cwd);
       if (logResults) {
         log("dorje_tool.result", { tool: toolSpec.name, result_chars: stdout.length, result_preview: preview(stdout) });
