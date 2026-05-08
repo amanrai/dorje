@@ -112,7 +112,10 @@ async function runHook(name, payload = {}) {
       DORJE_HOOK_NAME: name,
       DORJE_HOOK_PAYLOAD: JSON.stringify(payload),
     });
-    log("hook.end", { hook: name, payload, output: preview(stdout) });
+    log("hook.end", { hook: name, payload, output_chars: stdout.length });
+    if (stdout.length > 0) {
+      process.stderr.write(`[dorje-pi-agent hook.output ${name}]\n${stdout}\n`);
+    }
   } catch (error) {
     log("hook.error", { hook: name, payload, error: error instanceof Error ? error.message : String(error) });
     throw error;
