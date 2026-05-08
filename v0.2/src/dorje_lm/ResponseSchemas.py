@@ -37,6 +37,13 @@ class EntityExtraction(StrictSchema):
     concepts: list[str] = Field(default_factory=list)
 
 
+class RDFTypedValue(StrictSchema):
+    """Typed node or literal value used in RDF qualifiers."""
+
+    value: str = Field(description="Node id or literal value.")
+    value_type: Literal["node", "text", "int", "float", "bool", "json"]
+
+
 class RDFTriple(StrictSchema):
     """One subject-predicate-object fact extracted from text."""
 
@@ -44,6 +51,10 @@ class RDFTriple(StrictSchema):
     predicate: str = Field(description="Relationship or property name.")
     object: str = Field(description="Object node id or literal value.")
     object_type: Literal["node", "text", "int", "float", "bool", "json"]
+    qualifiers: dict[str, RDFTypedValue] = Field(
+        default_factory=dict,
+        description="Context attached to the fact, such as location, date, source, or method.",
+    )
     evidence: str = Field(description="Short source quote supporting the triple.")
 
 
