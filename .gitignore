@@ -17,5 +17,7 @@ node_modules/
 .env
 .env.*
 
-# Dorje indexes
+# Dorje indexes/local corpora
 .dorje/
+arxiv/
+**/arxiv/

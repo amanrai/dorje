@@ -99,9 +99,11 @@ function validateRequest(request) {
   }
 }
 
-function buildSystemPrompt(skillsText) {
+function buildSystemPrompt(skillsText, hintsText) {
   const template = fs.readFileSync(PI_AGENT_PROMPT, "utf8");
-  return template.replace("{{ skills_text }}", skillsText || "No skills loaded.");
+  return template
+    .replace("{{ skills_text }}", skillsText || "No skills loaded.")
+    .replace("{{ hints_text }}", hintsText || "No corpus-local hints.");
 }
 
 async function runHook(name, payload = {}) {
@@ -212,17 +214,18 @@ async function runAgent(request) {
   const query = boundedString(request.query, "query");
   const cwd = boundedString(request.cwd || process.cwd(), "cwd");
   const skillsText = boundedString(request.skills_text || "", "skills_text");
+  const hintsText = boundedString(request.hints_text || "", "hints_text");
   const tools = Array.isArray(request.tools) ? request.tools : [];
   const skillNames = Array.isArray(request.skill_names) ? request.skill_names : [];
   const logResults = request.context?.log_results === true;
-  log("run.input", { run_id: runId, cwd, query_chars: query.length, skills_chars: skillsText.length, tools: tools.length, log_results: logResults });
+  log("run.input", { run_id: runId, cwd, query_chars: query.length, skills_chars: skillsText.length, hints_chars: hintsText.length, tools: tools.length, log_results: logResults });
 
   const agentDir = getAgentDir();
   log("resource_loader.create", { run_id: runId, agentDir });
   const resourceLoader = new DefaultResourceLoader({
     cwd,
     agentDir,
-    systemPromptOverride: () => buildSystemPrompt(skillsText),
+    systemPromptOverride: () => buildSystemPrompt(skillsText, hintsText),
     extensionFactories: [
       (pi) => {
         pi.on("tool_call", async (event) => {

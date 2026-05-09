@@ -1,5 +1,30 @@
-"""Simple file-backed content handle store."""
+"""Dorje handle primitives."""
 
 from dorje.handles.store import HandleRecord, HandleStore
+from dorje.handles.types import (
+    HandleAxes,
+    HandleContract,
+    HandleDescriptor,
+    HandleKind,
+    HandlePurpose,
+    IndexState,
+    MediaType,
+    ProvenanceRole,
+    default_axes_for_stored_content,
+    file_ref_axes,
+)
 
-__all__ = ["HandleRecord", "HandleStore"]
+__all__ = [
+    "HandleAxes",
+    "HandleContract",
+    "HandleDescriptor",
+    "HandleKind",
+    "HandlePurpose",
+    "HandleRecord",
+    "HandleStore",
+    "IndexState",
+    "MediaType",
+    "ProvenanceRole",
+    "default_axes_for_stored_content",
+    "file_ref_axes",
+]

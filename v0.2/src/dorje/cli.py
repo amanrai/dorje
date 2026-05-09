@@ -8,6 +8,7 @@ from dorje import __version__
 from dorje.agent_runtime import AgentRequest, AgentRuntimeConfig, create_agent_runtime
 from dorje.db import connect, init_schema
 from dorje.extensions import load_extensions
+from dorje.hints import HintStore
 from dorje.skills import load_skills
 from dorje_lm import LMConfig, LMRequest, create_lm_provider
 from dorje_lm.ResponseSchemas import get_response_schema, list_response_schemas
@@ -17,9 +18,11 @@ app = typer.Typer(no_args_is_help=True)
 lm_app = typer.Typer(no_args_is_help=True)
 tools_app = typer.Typer(no_args_is_help=True)
 skills_app = typer.Typer(no_args_is_help=True)
+hints_app = typer.Typer(no_args_is_help=True)
 app.add_typer(lm_app, name="lm")
 app.add_typer(tools_app, name="tools")
 app.add_typer(skills_app, name="skills")
+app.add_typer(hints_app, name="hints")
 
 
 @app.callback(invoke_without_command=True)
@@ -69,6 +72,62 @@ def doctor() -> None:
     print(f"SQLite: {sqlite_version}")
     print(f"FTS5: {'yes' if fts_ok else 'no'}")
     print(f"sqlite-vec: {vec_version}")
+
+
+@hints_app.command("add")
+def hints_add(text: str) -> None:
+    """Add a corpus-local hint."""
+    hint = HintStore().add(text)
+    print(f"Added hint {hint.id}: {hint.text}")
+
+
+@hints_app.command("list")
+def hints_list(include_deleted: bool = typer.Option(False, "--all", help="Include deleted hints.")) -> None:
+    """List corpus-local hints."""
+    hints = HintStore().list(include_deleted=include_deleted)
+    if not hints:
+        print("No hints.")
+        return
+    for hint in hints:
+        print(f"{hint.id}\t{hint.status}\t{hint.text}")
+
+
+@hints_app.command("examine")
+def hints_examine() -> None:
+    """Show active hints as runtime context."""
+    hints = HintStore().active()
+    if not hints:
+        print("No active hints.")
+        return
+    for hint in hints:
+        print(f"[{hint.id}] {hint.text}")
+
+
+@hints_app.command("show")
+def hints_show(hint_id: int) -> None:
+    """Show one hint."""
+    try:
+        hint = HintStore().get(hint_id, include_deleted=True)
+    except KeyError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    print(orjson.dumps(hint.to_json(), option=orjson.OPT_INDENT_2).decode())
+
+
+@hints_app.command("delete")
+def hints_delete(hint_id: int) -> None:
+    """Delete a corpus-local hint."""
+    try:
+        hint = HintStore().delete(hint_id)
+    except KeyError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    print(f"Deleted hint {hint.id}: {hint.text}")
+
+
+@hints_app.command("clear")
+def hints_clear() -> None:
+    """Delete all active corpus-local hints."""
+    count = HintStore().clear()
+    print(f"Deleted {count} active hint(s).")
 
 
 @skills_app.command("list")

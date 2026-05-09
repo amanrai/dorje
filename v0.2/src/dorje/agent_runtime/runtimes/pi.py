@@ -6,6 +6,7 @@ from typing import Any
 from dorje.agent_runtime.errors import AgentRuntimeError
 from dorje.agent_runtime.types import AgentRequest, AgentResponse
 from dorje.extensions import load_extensions
+from dorje.hints import HintStore, format_active_hints
 from dorje_lm.providers.pi.sidecar import SidecarProcess
 from dorje.skills import load_skills
 
@@ -21,6 +22,7 @@ class PiAgentRuntime:
         registry = load_extensions()
         skills = load_skills()
         requested_skills = _select_skills(skills, request.skill_names)
+        hints_text = format_active_hints(HintStore().active())
         payload: dict[str, Any] = {
             "op": "run",
             "query": request.query,
@@ -28,6 +30,7 @@ class PiAgentRuntime:
             "model": self._model,
             "skill_names": [skill.name for skill in requested_skills],
             "skills_text": _format_skills(requested_skills),
+            "hints_text": hints_text,
             "tools": [
                 {
                     "name": spec.name,
