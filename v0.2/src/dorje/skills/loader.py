@@ -24,14 +24,24 @@ class SkillSpec:
 
 
 def default_skill_roots(cwd: Path | None = None, home: Path | None = None) -> tuple[Path, ...]:
-    """Return skill roots in precedence order."""
+    """Return skill roots in precedence order.
+
+    Bundled/default skills come from the installed Dorje distribution, not the
+    folder where ``dorje`` is invoked. Corpus-local skills live under
+    ``./.dorje/skills``.
+    """
     resolved_cwd = cwd if cwd is not None else Path.cwd()
     resolved_home = home if home is not None else Path.home()
     return (
-        resolved_cwd / "base_skills",
+        bundled_skill_root(),
         resolved_cwd / ".dorje" / "skills",
         resolved_home / ".dorje" / "skills",
     )
+
+
+def bundled_skill_root() -> Path:
+    """Return the bundled skill root for this Dorje install."""
+    return Path(__file__).resolve().parents[3] / "base_skills"
 
 
 def load_skills(roots: tuple[Path, ...] | None = None) -> dict[str, SkillSpec]:

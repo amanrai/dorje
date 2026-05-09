@@ -1,6 +1,6 @@
 name: handles
-description: Store and read typed text content handles.
+description: Store typed text content handles and inspect handle content into context.
 version: 0.1.0
 tools:
   - store_handle
-  - read_handle
+  - read_handle_into_context

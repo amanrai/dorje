@@ -14,14 +14,24 @@ EXTENSION_FILE = "extension.py"
 
 
 def default_extension_roots(cwd: Path | None = None, home: Path | None = None) -> tuple[Path, ...]:
-    """Return extension roots in precedence order."""
+    """Return extension roots in precedence order.
+
+    Bundled/default extensions come from the installed Dorje distribution, not
+    the folder where ``dorje`` is invoked. Corpus-local extensions live under
+    ``./.dorje/extensions``.
+    """
     resolved_cwd = cwd if cwd is not None else Path.cwd()
     resolved_home = home if home is not None else Path.home()
     return (
-        resolved_cwd / "base_extensions",
+        bundled_extension_root(),
         resolved_cwd / ".dorje" / "extensions",
         resolved_home / ".dorje" / "extensions",
     )
+
+
+def bundled_extension_root() -> Path:
+    """Return the bundled extension root for this Dorje install."""
+    return Path(__file__).resolve().parents[3] / "base_extensions"
 
 
 def load_extensions(roots: Iterable[Path] | None = None) -> ToolRegistry:

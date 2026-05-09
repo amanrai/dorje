@@ -3,10 +3,12 @@ from pathlib import Path
 from dorje.skills import default_skill_roots, load_skills
 
 
-def test_default_roots_include_base_skills(tmp_path: Path) -> None:
+def test_default_roots_include_bundled_then_corpus_then_home(tmp_path: Path) -> None:
     roots = default_skill_roots(cwd=tmp_path, home=tmp_path / "home")
 
-    assert roots[0] == tmp_path / "base_skills"
+    assert roots[0].name == "base_skills"
+    assert roots[1] == tmp_path / ".dorje" / "skills"
+    assert roots[2] == tmp_path / "home" / ".dorje" / "skills"
 
 
 def test_folder_skill_loading(tmp_path: Path) -> None:

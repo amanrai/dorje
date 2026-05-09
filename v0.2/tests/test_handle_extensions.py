@@ -15,7 +15,7 @@ def test_handle_tools_and_chunk_handle() -> None:
     handle = stored["handle"]
     assert isinstance(handle, str)
 
-    read = registry.call("read_handle", {"handle": handle})
+    read = registry.call("read_handle_into_context", {"handle": handle})
     assert isinstance(read, dict)
     assert read["content"] == "A paragraph.\n\nAnother paragraph."
 

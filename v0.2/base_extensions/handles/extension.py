@@ -23,9 +23,9 @@ def store_handle(content: str, content_type: str = "text/markdown", label: str =
     }
 
 
-@tool(description="Read content from a typed handle.")
-def read_handle(handle: str, max_chars: int = MAX_READ_CHARS) -> dict[str, object]:
-    """Read stored handle content."""
+@tool(description="Read content from a typed handle into LM context. Use only for bounded inspection, not data transport.")
+def read_handle_into_context(handle: str, max_chars: int = MAX_READ_CHARS) -> dict[str, object]:
+    """Read stored handle content into the caller/LM context for inspection."""
     if max_chars <= 0:
         raise ValueError("max_chars must be positive")
     record = HandleStore().get(handle)

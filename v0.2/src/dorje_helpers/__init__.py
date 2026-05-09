@@ -64,8 +64,8 @@ DORJE_HELPERS_DOCS = """
 These helpers are importable inside code executed by the `run_python` tool.
 
 Use them when your Python code needs Dorje-managed content, especially handles.
-Do not call tools like `read_handle` into the LM conversation just so Python can
-process the text. Pass the handle to Python and read it there.
+Do not call tools like `read_handle_into_context` into the LM conversation just
+so Python can process the text. Pass the handle to Python and read it there.
 
 ```python
 from dorje_helpers import iter_handles, read_handle, write_handle, store_handle

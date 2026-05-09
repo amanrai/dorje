@@ -108,7 +108,7 @@ uv run dorje tools call echo '{"value":"hello"}'
 uv run dorje tools call add '{"a":2,"b":5}'
 uv run dorje tools call get_from_wikipedia '{"title":"Battle of Cannae"}'
 uv run dorje tools call store_handle '{"content":"# Hello","content_type":"text/markdown","label":"demo"}'
-uv run dorje tools call read_handle '{"handle":"h_..."}'
+uv run dorje tools call read_handle_into_context '{"handle":"h_..."}'
 uv run dorje tools call chunk_md '{"markdown":"# Title\n\nFirst paragraph.","max_chars":1000}'
 uv run dorje tools call chunk_md_handle '{"handle":"h_...","max_chars":2000}'
 ```
@@ -116,7 +116,7 @@ uv run dorje tools call chunk_md_handle '{"handle":"h_...","max_chars":2000}'
 Extension discovery order:
 
 ```text
-./base_extensions
+bundled Dorje extensions from the installed distribution
 ./.dorje/extensions
 ~/.dorje/extensions
 ```
@@ -132,7 +132,7 @@ uv run dorje skills show summarize_wikipedia_page
 Skill discovery order:
 
 ```text
-./base_skills
+bundled Dorje skills from the installed distribution
 ./.dorje/skills
 ~/.dorje/skills
 ```
