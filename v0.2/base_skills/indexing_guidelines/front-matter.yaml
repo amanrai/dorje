@@ -1,0 +1,3 @@
+name: indexing_guidelines
+description: General primitive-first guidelines for turning corpus sources into indexable handles and indexes.
+version: 0.1.0
