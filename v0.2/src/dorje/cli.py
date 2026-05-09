@@ -1,8 +1,10 @@
+from pathlib import Path
 from typing import Literal
 
 import orjson
 import typer
 from rich import print
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from dorje import __version__
 from dorje.agent_runtime import AgentRequest, AgentRuntimeConfig, create_agent_runtime
@@ -10,6 +12,7 @@ from dorje.db import connect, init_schema
 from dorje.extensions import load_extensions
 from dorje.hints import HintStore
 from dorje.skills import load_skills
+from dorje.sync import sync_corpus
 from dorje_lm import LMConfig, LMRequest, create_lm_provider
 from dorje_lm.ResponseSchemas import get_response_schema, list_response_schemas
 from dorje.agent_runtime.types import AgentRuntimeKind
@@ -49,6 +52,31 @@ def root(
 def version() -> None:
     """Print the Dorje version."""
     print(__version__)
+
+
+@app.command()
+def sync(
+    path: Path = typer.Argument(Path("."), help="Corpus folder to sync."),
+    glob: str = typer.Option("**/*", "--glob", help="Glob of files to include."),
+    quiet: bool = typer.Option(False, "--quiet", help="Disable progress UI."),
+) -> None:
+    """Build/update the corpus source manifest and report changes."""
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.completed:,.0f}/{task.total:,.0f}"),
+        TimeElapsedColumn(),
+        disable=quiet,
+    )
+    task_id = progress.add_task("sync scanning", total=1)
+
+    def on_progress(label: str, completed: int, total: int | None) -> None:
+        progress.update(task_id, total=total or 1, completed=completed, description=f"sync {label}")
+
+    with progress:
+        result = sync_corpus(path, glob=glob, progress_callback=on_progress)
+    print(orjson.dumps(result.to_json(), option=orjson.OPT_INDENT_2).decode())
 
 
 @app.command()

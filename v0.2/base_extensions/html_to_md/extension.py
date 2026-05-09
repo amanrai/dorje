@@ -24,11 +24,38 @@ def html_to_md(html: str, strip_scripts: bool = True) -> dict[str, object]:
     }
 
 
-@tool(description="Convert an HTML handle into a Markdown handle.")
+@tool(description="Convert an HTML handle or collection of HTML handles into Markdown handle(s).")
 def html_handle_to_md_handle(handle: str, strip_scripts: bool = True, label: str = "") -> dict[str, object]:
-    """Read an HTML handle, convert it to Markdown, and store the Markdown as a new handle."""
+    """Read HTML handle(s), convert to Markdown, and store Markdown handle(s)."""
     store = HandleStore()
     record = store.get(handle)
+    if record.kind == "collection":
+        members = []
+        for member in record.members:
+            member_handle = member.get("handle")
+            if not isinstance(member_handle, str):
+                continue
+            member_record = store.get(member_handle)
+            if member_record.content_type not in ("text/html", "application/xhtml+xml", "text/plain"):
+                continue
+            members.append(_convert_one(store, member_record, strip_scripts=strip_scripts, label=""))
+        collection = store.put_collection(
+            members,
+            label=label or f"{record.label or record.handle} markdown collection",
+            metadata={"derived_from": record.handle, "converter": "html_handle_to_md_handle"},
+        )
+        return {
+            "source_handle": record.handle,
+            "handle": collection.handle,
+            "kind": collection.kind,
+            "content_type": collection.content_type,
+            "members_count": len(members),
+            "members_preview": members[:20],
+        }
+    return _convert_one(store, record, strip_scripts=strip_scripts, label=label)
+
+
+def _convert_one(store: HandleStore, record, strip_scripts: bool, label: str) -> dict[str, object]:
     if record.content_type not in ("text/html", "application/xhtml+xml", "text/plain"):
         raise ValueError("html_handle_to_md_handle only supports text/html, application/xhtml+xml, or text/plain handles")
     markdown = _convert(record.content, strip_scripts=strip_scripts)
@@ -36,11 +63,15 @@ def html_handle_to_md_handle(handle: str, strip_scripts: bool = True, label: str
         content=markdown,
         content_type="text/markdown",
         label=label or f"{record.label or record.handle} markdown",
+        metadata={"derived_from": record.handle, "converter": "html_handle_to_md_handle"},
     )
     return {
         "source_handle": record.handle,
         "handle": output.handle,
+        "kind": output.kind,
         "content_type": output.content_type,
+        "role": output.role,
+        "index_state": output.index_state,
         "label": output.label,
         "sha256": output.sha256,
         "char_count": len(output.content),

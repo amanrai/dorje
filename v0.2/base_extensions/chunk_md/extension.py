@@ -62,15 +62,47 @@ def chunk_md(
     return chunks
 
 
-@tool(description="Chunk a Markdown/plaintext handle into paragraph-aligned chunk handles.")
+@tool(description="Chunk a Markdown/plaintext handle or collection into paragraph-aligned chunk handles/collection.")
 def chunk_md_handle(
     handle: str,
     max_chars: int = DEFAULT_MAX_CHARS,
     overlap_paragraphs: int = DEFAULT_OVERLAP_PARAGRAPHS,
-) -> list[dict[str, object]]:
-    """Return paragraph-aligned chunk handles for a stored Markdown/plaintext handle."""
+) -> dict[str, object] | list[dict[str, object]]:
+    """Return paragraph-aligned chunk handles for Markdown/plaintext handle(s)."""
     store = HandleStore()
     record = store.get(handle)
+    if record.kind == "collection":
+        members: list[dict[str, object]] = []
+        for member in record.members:
+            member_handle = member.get("handle")
+            if not isinstance(member_handle, str):
+                continue
+            member_record = store.get(member_handle)
+            if member_record.content_type not in ("text/markdown", "text/plain"):
+                continue
+            members.extend(_chunk_one(store, member_record, max_chars=max_chars, overlap_paragraphs=overlap_paragraphs))
+        collection = store.put_collection(
+            members,
+            label=f"{record.label or record.handle} chunks",
+            metadata={"derived_from": record.handle, "chunker": "chunk_md_handle"},
+        )
+        return {
+            "source_handle": record.handle,
+            "handle": collection.handle,
+            "kind": collection.kind,
+            "content_type": collection.content_type,
+            "members_count": len(members),
+            "members_preview": members[:20],
+        }
+    return _chunk_one(store, record, max_chars=max_chars, overlap_paragraphs=overlap_paragraphs)
+
+
+def _chunk_one(
+    store: HandleStore,
+    record,
+    max_chars: int,
+    overlap_paragraphs: int,
+) -> list[dict[str, object]]:
     if record.content_type not in ("text/markdown", "text/plain"):
         raise ValueError("chunk_md_handle only supports text/markdown or text/plain handles")
     chunks = chunk_md(record.content, max_chars=max_chars, overlap_paragraphs=overlap_paragraphs)
@@ -83,12 +115,17 @@ def chunk_md_handle(
             content=chunk_text,
             content_type=record.content_type,
             label=f"{record.label} chunk {len(output) + 1}",
+            metadata={"derived_from": record.handle, "chunk_id": item["id"]},
         )
         output.append(
             {
                 "id": item["id"],
+                "source_handle": record.handle,
                 "handle": chunk_record.handle,
+                "kind": chunk_record.kind,
                 "content_type": chunk_record.content_type,
+                "role": chunk_record.role,
+                "index_state": chunk_record.index_state,
                 "label": chunk_record.label,
                 "start_paragraph": item["start_paragraph"],
                 "end_paragraph": item["end_paragraph"],
