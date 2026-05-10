@@ -13,7 +13,7 @@ DEFAULT_MAX_RESULTS = 1000
 MAX_RESULTS_LIMIT = 10000
 
 
-@tool(description="List files as uncopied file-ref source handles and return a collection handle.", produces="collection/file_ref")
+@tool(description="List files as uncopied file-ref source handles and return a collection handle.", requires="filesystem:path", produces="collection/file_ref")
 def ls_as_handles(
     path: str = ".",
     glob: str = "*",

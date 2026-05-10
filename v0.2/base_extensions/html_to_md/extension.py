@@ -24,7 +24,7 @@ def html_to_md(html: str, strip_scripts: bool = True) -> dict[str, object]:
     }
 
 
-@tool(description="Convert an HTML handle or collection of HTML handles into Markdown handle(s).", produces="collection/extracted_markdown")
+@tool(description="Convert an HTML handle or collection of HTML handles into Markdown handle(s).", requires="derivative:text/html|application/xhtml+xml|text/plain", produces="collection/extracted_markdown")
 def html_handle_to_md_handle(handle: str, strip_scripts: bool = True, label: str = "") -> dict[str, object]:
     """Read HTML handle(s), convert to Markdown, and store Markdown handle(s)."""
     store = HandleStore()

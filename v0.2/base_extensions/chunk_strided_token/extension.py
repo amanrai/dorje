@@ -6,7 +6,7 @@ from dorje.handles import HandleStore
 from dorje_sdk import tool
 
 
-@tool(description="Placeholder for strided token-window chunking. Requires tokenizer integration before use.", produces="collection/full_text_chunk")
+@tool(description="Placeholder for strided token-window chunking. Requires tokenizer integration before use.", requires="derivative:text/markdown|text/plain", produces="collection/full_text_chunk")
 def chunk_strided_token(handle: str, window_tokens: int = 512, stride_tokens: int = 256) -> dict[str, object]:
     if window_tokens <= 0 or stride_tokens <= 0:
         raise ValueError("window_tokens and stride_tokens must be positive")

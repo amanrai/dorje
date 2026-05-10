@@ -12,6 +12,7 @@ def tool(
     *,
     name: str | None = None,
     description: str | None = None,
+    requires: str | None = None,
     produces: str | None = None,
 ) -> F | Callable[[F], F]:
     """Mark a function as a Dorje tool.
@@ -24,6 +25,7 @@ def tool(
         setattr(inner, "__dorje_tool__", True)
         setattr(inner, "__dorje_tool_name__", name or inner.__name__)
         setattr(inner, "__dorje_tool_description__", description or (inner.__doc__ or ""))
+        setattr(inner, "__dorje_tool_requires__", requires or "")
         setattr(inner, "__dorje_tool_produces__", produces or "")
         return inner
 

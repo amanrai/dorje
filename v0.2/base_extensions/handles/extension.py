@@ -9,7 +9,7 @@ DEFAULT_PREVIEW_CHARS = 1000
 MAX_READ_CHARS = 200_000
 
 
-@tool(description="Store text, Markdown, or JSON string content and return a typed handle.", produces="manual")
+@tool(description="Store text, Markdown, or JSON string content and return a typed handle.", requires="inline:string", produces="manual")
 def store_handle(content: str, content_type: str = "text/markdown", label: str = "") -> dict[str, object]:
     """Store content and return handle metadata."""
     record = HandleStore().put(content=content, content_type=content_type, label=label)

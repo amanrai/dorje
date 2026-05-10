@@ -16,6 +16,7 @@ class ToolSpec:
     description: str
     extension_name: str
     callable: Callable[..., Any]
+    requires: str = ""
     produces: str = ""
 
 

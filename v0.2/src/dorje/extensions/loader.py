@@ -78,6 +78,7 @@ def _register_module_tools(registry: ToolRegistry, extension_name: str, module: 
             continue
         name = getattr(value, "__dorje_tool_name__", None)
         description = getattr(value, "__dorje_tool_description__", "")
+        requires = getattr(value, "__dorje_tool_requires__", "")
         produces = getattr(value, "__dorje_tool_produces__", "")
         if not isinstance(name, str) or len(name) == 0:
             raise ValueError(f"invalid tool name in extension: {extension_name}")
@@ -87,6 +88,7 @@ def _register_module_tools(registry: ToolRegistry, extension_name: str, module: 
                 description=description if isinstance(description, str) else "",
                 extension_name=extension_name,
                 callable=value,
+                requires=requires if isinstance(requires, str) else "",
                 produces=produces if isinstance(produces, str) else "",
             )
         )

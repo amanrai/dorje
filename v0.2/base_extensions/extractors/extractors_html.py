@@ -15,7 +15,7 @@ from dorje_sdk import tool
 from extractors_common import HTML_MEDIA_TYPES, collection_result, fetch_image_bytes, get_file_ref, handle_result, member, resolve_image_src
 
 
-@tool(description="Extract Markdown from a text/html or application/xhtml+xml file_ref handle.", produces="extracted_markdown")
+@tool(description="Extract Markdown from a text/html or application/xhtml+xml file_ref handle.", requires="file_ref:text/html|application/xhtml+xml", produces="extracted_markdown")
 def extract_html_to_markdown(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -35,7 +35,7 @@ def extract_html_to_markdown(handle: str, label: str = "") -> dict[str, object]:
     return handle_result(record.handle, output)
 
 
-@tool(description="Extract Markdown table derivatives from a text/html or application/xhtml+xml file_ref handle.", produces="collection/table")
+@tool(description="Extract Markdown table derivatives from a text/html or application/xhtml+xml file_ref handle.", requires="file_ref:text/html|application/xhtml+xml", produces="collection/table")
 def extract_tables_from_html(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -129,7 +129,7 @@ def _coerce_value(value: str, column_type: object) -> object:
     return value
 
 
-@tool(description="Fetch actual image payloads referenced by HTML img tags and store each as base64 image JSON.", produces="collection/image")
+@tool(description="Fetch actual image payloads referenced by HTML img tags and store each as base64 image JSON.", requires="file_ref:text/html|application/xhtml+xml", produces="collection/image")
 def get_images_for_html(handle: str, base_url: str = "", label: str = "", max_bytes: int = 10_000_000) -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -158,7 +158,7 @@ def get_images_for_html(handle: str, base_url: str = "", label: str = "", max_by
     return collection_result(record.handle, collection, members)
 
 
-@tool(description="Extract document figure records from HTML img/figure elements: src, alt text, caption, and Markdown reference; does not fetch image bytes.", produces="collection/figure")
+@tool(description="Extract document figure records from HTML img/figure elements: src, alt text, caption, and Markdown reference; does not fetch image bytes.", requires="file_ref:text/html|application/xhtml+xml", produces="collection/figure")
 def extract_figures_from_html(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)

@@ -323,11 +323,12 @@ def tools_list() -> None:
     table = Table(title="Dorje Tools", show_lines=False)
     table.add_column("Tool", style="bold cyan", no_wrap=True)
     table.add_column("Extension", style="green", no_wrap=True)
+    table.add_column("Requires", style="yellow", no_wrap=True)
     table.add_column("Produces", style="magenta", no_wrap=True)
     table.add_column("Description", overflow="fold")
     for spec in registry.list():
-        table.add_row(spec.name, spec.extension_name, spec.produces or "—", spec.description.strip())
-    Console(width=140).print(table)
+        table.add_row(spec.name, spec.extension_name, spec.requires or "—", spec.produces or "—", spec.description.strip())
+    Console(width=220).print(table)
 
 
 @tools_app.command("call")
