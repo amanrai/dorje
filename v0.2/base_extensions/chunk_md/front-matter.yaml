@@ -1,6 +1,0 @@
-name: chunk_md
-description: Chunk Markdown text into paragraph-aligned chunks with UUIDs.
-version: 0.1.0
-tools:
-  - chunk_md
-  - chunk_md_handle

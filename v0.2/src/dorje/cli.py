@@ -316,6 +316,13 @@ def skills_show(name: str) -> None:
     print(skills[name].text)
 
 
+@tools_app.command("listnames")
+def tools_listnames() -> None:
+    """List discovered extension tool names alphabetically, one per line."""
+    for spec in load_extensions().list():
+        print(spec.name)
+
+
 @tools_app.command("list")
 def tools_list() -> None:
     """List discovered extension tools."""

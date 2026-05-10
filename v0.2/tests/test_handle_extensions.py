@@ -3,7 +3,7 @@ from pathlib import Path
 from dorje.extensions import load_extensions
 
 
-def test_handle_tools_and_chunk_handle() -> None:
+def test_handle_tools_and_markdown_paragraph_chunker() -> None:
     root = Path(__file__).resolve().parents[1] / "base_extensions"
     registry = load_extensions(roots=(root,))
 
@@ -19,8 +19,6 @@ def test_handle_tools_and_chunk_handle() -> None:
     assert isinstance(read, dict)
     assert read["content"] == "A paragraph.\n\nAnother paragraph."
 
-    chunks = registry.call("chunk_md_handle", {"handle": handle, "max_chars": 20})
-    assert isinstance(chunks, list)
-    assert len(chunks) == 2
-    assert isinstance(chunks[0], dict)
-    assert "handle" in chunks[0]
+    chunks = registry.call("chunk_markdown_paragraphs", {"handle": handle, "max_chars": 20})
+    assert isinstance(chunks, dict)
+    assert chunks["members_count"] == 2

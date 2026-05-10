@@ -34,20 +34,17 @@ def test_ls_as_handles_returns_collection_of_file_refs(tmp_path: Path, monkeypat
     assert code_collection.members[0]["media_type"] == "text/x-code-python"
 
 
-def test_html_and_chunk_tools_accept_collections(tmp_path: Path, monkeypatch) -> None:
+def test_collection_filtering_after_ls_as_handles(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     data = tmp_path / "data"
     data.mkdir()
     (data / "a.html").write_text("<h1>A</h1><p>Alpha</p>", encoding="utf-8")
-    (data / "b.html").write_text("<h1>B</h1><p>Beta</p>", encoding="utf-8")
+    (data / "b.txt").write_text("Beta", encoding="utf-8")
     root = Path(__file__).resolve().parents[1] / "base_extensions"
     registry = load_extensions(roots=(root,))
 
-    source_collection = cast(dict[str, Any], registry.call("ls_as_handles", {"path": str(data), "glob": "*.html"}))
-    md_collection = cast(dict[str, Any], registry.call("html_handle_to_md_handle", {"handle": source_collection["handle"]}))
-    chunk_collection = cast(dict[str, Any], registry.call("chunk_md_handle", {"handle": md_collection["handle"], "max_chars": 100}))
+    source_collection = cast(dict[str, Any], registry.call("ls_as_handles", {"path": str(data), "glob": "*"}))
+    filtered = cast(dict[str, Any], registry.call("filter_collection", {"handle": source_collection["handle"], "media_type": "text/html"}))
 
-    assert md_collection["kind"] == "collection"
-    assert md_collection["members_count"] == 2
-    assert chunk_collection["kind"] == "collection"
-    assert chunk_collection["members_count"] == 2
+    assert filtered["kind"] == "collection"
+    assert filtered["members_count"] == 1

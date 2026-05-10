@@ -109,8 +109,8 @@ uv run dorje tools call add '{"a":2,"b":5}'
 uv run dorje tools call get_from_wikipedia '{"title":"Battle of Cannae"}'
 uv run dorje tools call store_handle '{"content":"# Hello","content_type":"text/markdown","label":"demo"}'
 uv run dorje tools call read_handle_into_context '{"handle":"h_..."}'
-uv run dorje tools call chunk_md '{"markdown":"# Title\n\nFirst paragraph.","max_chars":1000}'
-uv run dorje tools call chunk_md_handle '{"handle":"h_...","max_chars":2000}'
+uv run dorje tools call chunk_markdown_paragraphs '{"handle":"h_...","max_chars":2000}'
+uv run dorje tools call chunk_markdown_sections '{"handle":"h_..."}'
 ```
 
 Extension discovery order:

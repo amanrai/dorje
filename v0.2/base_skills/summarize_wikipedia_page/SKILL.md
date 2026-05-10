@@ -7,7 +7,7 @@ Use this skill when the user wants a concise summary of a Wikipedia page or Wiki
 1. If the page content is not already provided, use the `get_from_wikipedia` tool with the user's requested page title.
 2. `get_from_wikipedia` returns a Markdown content handle, not the full page text.
 3. Use `read_handle` to read the handle when you need page content.
-4. If the page is long, use `chunk_md_handle` before detailed analysis.
+4. If the page is long, use `chunk_markdown_sections` or `chunk_markdown_paragraphs` before detailed analysis.
 5. Produce a grounded Markdown summary.
 6. Do not invent facts that are not present in the source text.
 7. Prefer plain language over dense encyclopedic prose.
