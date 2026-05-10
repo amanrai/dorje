@@ -46,7 +46,7 @@ def extract_markdown_source(handle: str, label: str = "") -> dict[str, object]:
     return handle_result(record.handle, output)
 
 
-@tool(description="Extract bibliography/reference entries from a Markdown/plaintext paper file_ref handle.", produces="reference_collection/reference")
+@tool(description="Extract bibliography/reference entries from a Markdown/plaintext paper file_ref handle.", produces="collection/reference")
 def extract_references_from_paper(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -66,7 +66,7 @@ def extract_references_from_paper(handle: str, label: str = "") -> dict[str, obj
             derivative_type="reference",
         )
         members.append(member(output))
-    collection = store.put_collection(members, label=label or f"{record.label or record.handle} references", metadata={"derived_from": record.handle, "extractor": "extract_references_from_paper"}, derivative_type="reference_collection")
+    collection = store.put_collection(members, label=label or f"{record.label or record.handle} references", metadata={"derived_from": record.handle, "extractor": "extract_references_from_paper", "member_derivative_type": "reference"}, derivative_type="collection")
     return collection_result(record.handle, collection, members)
 
 

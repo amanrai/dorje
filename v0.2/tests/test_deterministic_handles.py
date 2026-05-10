@@ -46,7 +46,7 @@ def test_collection_handles_are_deterministic_from_members_and_recipe(tmp_path: 
     store = HandleStore(tmp_path / "handles")
     members = [{"handle": "h_a"}, {"handle": "h_b"}]
 
-    first = store.put_collection(members, metadata={"filter": {"media_type": "text/html"}}, derivative_type="filtered_collection")
-    second = store.put_collection(members, metadata={"filter": {"media_type": "text/html"}}, derivative_type="filtered_collection")
+    first = store.put_collection(members, metadata={"filter": {"media_type": "text/html"}}, derivative_type="collection")
+    second = store.put_collection(members, metadata={"filter": {"media_type": "text/html"}}, derivative_type="collection")
 
     assert first.handle == second.handle

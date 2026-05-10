@@ -11,7 +11,7 @@ from dorje_sdk import tool
 from extractors_common import CSS_MEDIA_TYPES, JAVASCRIPT_MEDIA_TYPES, PYTHON_MEDIA_TYPES, collection_result, get_file_ref, member
 
 
-@tool(description="Extract Python classes/functions as code symbol derivative handles from a Python file_ref handle.", produces="code_symbol_collection/code_symbol")
+@tool(description="Extract Python classes/functions as code symbol derivative handles from a Python file_ref handle.", produces="collection/code_symbol")
 def extract_python_symbols(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -25,11 +25,11 @@ def extract_python_symbols(handle: str, label: str = "") -> dict[str, object]:
         kind = "class" if isinstance(node, ast.ClassDef) else "function"
         output = _put_code_symbol(store, record, lines, node.lineno, getattr(node, "end_lineno", node.lineno), node.name, kind, "extract_python_symbols", "text/x-code-python", label)
         members.append(member(output))
-    collection = store.put_collection(members, label=label or f"{record.label or record.handle} python symbols", metadata={"derived_from": record.handle, "extractor": "extract_python_symbols"}, derivative_type="code_symbol_collection")
+    collection = store.put_collection(members, label=label or f"{record.label or record.handle} python symbols", metadata={"derived_from": record.handle, "extractor": "extract_python_symbols", "member_derivative_type": "code_symbol"}, derivative_type="collection")
     return collection_result(record.handle, collection, members)
 
 
-@tool(description="Extract JavaScript/TypeScript classes/functions/components as code symbol derivative handles.", produces="code_symbol_collection/code_symbol")
+@tool(description="Extract JavaScript/TypeScript classes/functions/components as code symbol derivative handles.", produces="collection/code_symbol")
 def extract_js_symbols(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -41,11 +41,11 @@ def extract_js_symbols(handle: str, label: str = "") -> dict[str, object]:
         end = _brace_block_end(lines, start)
         output = _put_code_symbol(store, record, lines, start, end, name, kind, "extract_js_symbols", record.content_type, label)
         members.append(member(output))
-    collection = store.put_collection(members, label=label or f"{record.label or record.handle} js symbols", metadata={"derived_from": record.handle, "extractor": "extract_js_symbols"}, derivative_type="code_symbol_collection")
+    collection = store.put_collection(members, label=label or f"{record.label or record.handle} js symbols", metadata={"derived_from": record.handle, "extractor": "extract_js_symbols", "member_derivative_type": "code_symbol"}, derivative_type="collection")
     return collection_result(record.handle, collection, members)
 
 
-@tool(description="Extract CSS/SCSS/Sass/Less rule blocks as stylesheet rule derivatives.", produces="style_rule_collection/style_rule")
+@tool(description="Extract CSS/SCSS/Sass/Less rule blocks as stylesheet rule derivatives.", produces="collection/style_rule")
 def extract_css_rules(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -63,7 +63,7 @@ def extract_css_rules(handle: str, label: str = "") -> dict[str, object]:
             derivative_type="style_rule",
         )
         members.append(member(output))
-    collection = store.put_collection(members, label=label or f"{record.label or record.handle} css rules", metadata={"derived_from": record.handle, "extractor": "extract_css_rules"}, derivative_type="style_rule_collection")
+    collection = store.put_collection(members, label=label or f"{record.label or record.handle} css rules", metadata={"derived_from": record.handle, "extractor": "extract_css_rules", "member_derivative_type": "style_rule"}, derivative_type="collection")
     return collection_result(record.handle, collection, members)
 
 

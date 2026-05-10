@@ -24,7 +24,7 @@ def html_to_md(html: str, strip_scripts: bool = True) -> dict[str, object]:
     }
 
 
-@tool(description="Convert an HTML handle or collection of HTML handles into Markdown handle(s).", produces="markdown_conversion_collection/markdown_conversion")
+@tool(description="Convert an HTML handle or collection of HTML handles into Markdown handle(s).", produces="collection/extracted_markdown")
 def html_handle_to_md_handle(handle: str, strip_scripts: bool = True, label: str = "") -> dict[str, object]:
     """Read HTML handle(s), convert to Markdown, and store Markdown handle(s)."""
     store = HandleStore()
@@ -43,7 +43,7 @@ def html_handle_to_md_handle(handle: str, strip_scripts: bool = True, label: str
             members,
             label=label or f"{record.label or record.handle} markdown collection",
             metadata={"derived_from": record.handle, "converter": "html_handle_to_md_handle"},
-            derivative_type="markdown_conversion_collection",
+            derivative_type="collection",
         )
         return {
             "source_handle": record.handle,
@@ -65,7 +65,7 @@ def _convert_one(store: HandleStore, record, strip_scripts: bool, label: str) ->
         content_type="text/markdown",
         label=label or f"{record.label or record.handle} markdown",
         metadata={"derived_from": record.handle, "converter": "html_handle_to_md_handle"},
-        derivative_type="markdown_conversion",
+        derivative_type="extracted_markdown",
     )
     return {
         "source_handle": record.handle,

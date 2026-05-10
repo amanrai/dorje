@@ -35,7 +35,7 @@ def extract_html_to_markdown(handle: str, label: str = "") -> dict[str, object]:
     return handle_result(record.handle, output)
 
 
-@tool(description="Extract Markdown table derivatives from a text/html or application/xhtml+xml file_ref handle.", produces="table_collection/table")
+@tool(description="Extract Markdown table derivatives from a text/html or application/xhtml+xml file_ref handle.", produces="collection/table")
 def extract_tables_from_html(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -60,7 +60,7 @@ def extract_tables_from_html(handle: str, label: str = "") -> dict[str, object]:
             derivative_type="table",
         )
         members.append(member(output))
-    collection = store.put_collection(members, label=label or f"{record.label or record.handle} html tables", metadata={"derived_from": record.handle, "extractor": "extract_tables_from_html"}, derivative_type="table_collection")
+    collection = store.put_collection(members, label=label or f"{record.label or record.handle} html tables", metadata={"derived_from": record.handle, "extractor": "extract_tables_from_html", "member_derivative_type": "table"}, derivative_type="collection")
     return collection_result(record.handle, collection, members)
 
 
@@ -129,7 +129,7 @@ def _coerce_value(value: str, column_type: object) -> object:
     return value
 
 
-@tool(description="Fetch images referenced by HTML img tags and store each as a base64 JSON derivative.", produces="image_collection/image")
+@tool(description="Fetch images referenced by HTML img tags and store each as a base64 JSON derivative.", produces="collection/image")
 def get_images_for_html(handle: str, base_url: str = "", label: str = "", max_bytes: int = 10_000_000) -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -154,11 +154,11 @@ def get_images_for_html(handle: str, base_url: str = "", label: str = "", max_by
             derivative_type="image",
         )
         members.append(member(output))
-    collection = store.put_collection(members, label=label or f"{record.label or record.handle} html images", metadata={"derived_from": record.handle, "extractor": "get_images_for_html"}, derivative_type="image_collection")
+    collection = store.put_collection(members, label=label or f"{record.label or record.handle} html images", metadata={"derived_from": record.handle, "extractor": "get_images_for_html", "member_derivative_type": "image"}, derivative_type="collection")
     return collection_result(record.handle, collection, members)
 
 
-@tool(description="Extract figure/image reference derivatives from a text/html or application/xhtml+xml file_ref handle.", produces="figure_collection/figure")
+@tool(description="Extract figure/image reference derivatives from a text/html or application/xhtml+xml file_ref handle.", produces="collection/figure")
 def extract_figures_from_html(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -183,5 +183,5 @@ def extract_figures_from_html(handle: str, label: str = "") -> dict[str, object]
             derivative_type="figure",
         )
         members.append(member(output))
-    collection = store.put_collection(members, label=label or f"{record.label or record.handle} html figures", metadata={"derived_from": record.handle, "extractor": "extract_figures_from_html"}, derivative_type="figure_collection")
+    collection = store.put_collection(members, label=label or f"{record.label or record.handle} html figures", metadata={"derived_from": record.handle, "extractor": "extract_figures_from_html", "member_derivative_type": "figure"}, derivative_type="collection")
     return collection_result(record.handle, collection, members)

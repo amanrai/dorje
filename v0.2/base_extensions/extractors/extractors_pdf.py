@@ -16,7 +16,7 @@ def extract_pdf_to_markdown(handle: str, label: str = "") -> dict[str, object]:
     raise NotImplementedError("PDF-to-Markdown extraction backend is not installed yet")
 
 
-@tool(description="Placeholder PDF image extractor. Requires a future PDF image backend before it can emit derivatives.", produces="image_collection/image")
+@tool(description="Placeholder PDF image extractor. Requires a future PDF image backend before it can emit derivatives.", produces="collection/image")
 def extract_images_from_pdf(handle: str, label: str = "") -> dict[str, object]:
     del label
     record = get_file_ref(HandleStore(), handle)
@@ -25,7 +25,7 @@ def extract_images_from_pdf(handle: str, label: str = "") -> dict[str, object]:
     raise NotImplementedError("PDF image extraction backend is not installed yet")
 
 
-@tool(description="Placeholder PDF figure extractor. Requires a future PDF figure backend before it can emit derivatives.", produces="figure_collection/figure")
+@tool(description="Placeholder PDF figure extractor. Requires a future PDF figure backend before it can emit derivatives.", produces="collection/figure")
 def extract_figures_from_pdf(handle: str, label: str = "") -> dict[str, object]:
     del label
     record = get_file_ref(HandleStore(), handle)
@@ -34,7 +34,7 @@ def extract_figures_from_pdf(handle: str, label: str = "") -> dict[str, object]:
     raise NotImplementedError("PDF figure extraction backend is not installed yet")
 
 
-@tool(description="Placeholder PDF table extractor. Requires a future PDF table backend before it can emit derivatives.", produces="table_collection/table")
+@tool(description="Placeholder PDF table extractor. Requires a future PDF table backend before it can emit derivatives.", produces="collection/table")
 def extract_tables_from_pdf(handle: str, label: str = "") -> dict[str, object]:
     del label
     record = get_file_ref(HandleStore(), handle)

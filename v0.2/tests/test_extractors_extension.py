@@ -78,7 +78,7 @@ def test_get_images_for_html_fetches_local_images_as_base64(tmp_path: Path, monk
 
     result = cast(dict[str, Any], _registry().call("get_images_for_html", {"handle": source.handle}))
 
-    assert result["derivative_type"] == "image_collection"
+    assert result["derivative_type"] == "collection"
     assert result["members_count"] == 1
     collection = HandleStore().get(cast(str, result["handle"]))
     image = HandleStore().get(cast(str, collection.members[0]["handle"]))
@@ -137,7 +137,7 @@ def test_extract_python_symbols(tmp_path: Path, monkeypatch) -> None:
 
     result = cast(dict[str, Any], _registry().call("extract_python_symbols", {"handle": source.handle}))
 
-    assert result["derivative_type"] == "code_symbol_collection"
+    assert result["derivative_type"] == "collection"
     assert result["members_count"] == 2
     collection = HandleStore().get(cast(str, result["handle"]))
     names = {member["metadata"]["symbol_name"] for member in collection.members}

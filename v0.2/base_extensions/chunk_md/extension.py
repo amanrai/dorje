@@ -62,7 +62,7 @@ def chunk_md(
     return chunks
 
 
-@tool(description="Chunk a Markdown/plaintext handle or collection into paragraph-aligned chunk handles/collection.", produces="chunk_collection/full_text_chunk")
+@tool(description="Chunk a Markdown/plaintext handle or collection into paragraph-aligned chunk handles/collection.", produces="collection/full_text_chunk")
 def chunk_md_handle(
     handle: str,
     max_chars: int = DEFAULT_MAX_CHARS,
@@ -84,8 +84,8 @@ def chunk_md_handle(
         collection = store.put_collection(
             members,
             label=f"{record.label or record.handle} chunks",
-            metadata={"derived_from": record.handle, "chunker": "chunk_md_handle"},
-            derivative_type="chunk_collection",
+            metadata={"derived_from": record.handle, "chunker": "chunk_md_handle", "member_derivative_type": "full_text_chunk"},
+            derivative_type="collection",
         )
         return {
             "source_handle": record.handle,

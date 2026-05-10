@@ -11,11 +11,11 @@ def test_handle_store_writes_handles_and_edges_to_sqlite(tmp_path: Path) -> None
         "# A",
         content_type="text/markdown",
         metadata={"derived_from": source.handle, "converter": "test"},
-        derivative_type="markdown_conversion",
+        derivative_type="extracted_markdown",
     )
     collection = store.put_collection(
         [{"handle": source.handle}, {"handle": derivative.handle}],
-        derivative_type="test_collection",
+        derivative_type="collection",
     )
 
     conn = connect(tmp_path / ".dorje" / "dorje.sqlite")

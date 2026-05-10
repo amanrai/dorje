@@ -10,3 +10,4 @@ def test_tools_list_shows_produced_derivative_types() -> None:
     assert "Produces" in result.output
     assert "extract_html_to_markdown" in result.output
     assert "extracted_markdown" in result.output
+    assert "collection/table" in result.output

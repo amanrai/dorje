@@ -28,5 +28,5 @@ def test_inspect_and_filter_collection(tmp_path: Path, monkeypatch) -> None:
     assert filtered["skipped_count"] == 1
     collection = store.get(cast(str, filtered["handle"]))
     assert collection.kind == "collection"
-    assert collection.derivative_type == "filtered_collection"
+    assert collection.derivative_type == "collection"
     assert collection.members[0]["media_type"] == "text/html"
