@@ -149,7 +149,7 @@ def fts_search(
     rows = list(
         conn.execute(
             """
-            SELECT chunk_id, path, snippet(chunks_fts, 0, '[', ']', ' … ', 12) AS snippet,
+            SELECT chunk_id, path, substr(content, 1, 2000) AS snippet,
                    bm25(chunks_fts) AS score
             FROM chunks_fts
             WHERE chunks_fts MATCH ?
@@ -319,9 +319,9 @@ def tools_list() -> None:
     table = Table(title="Dorje Tools", show_lines=False)
     table.add_column("Tool", style="bold cyan", no_wrap=True)
     table.add_column("Extension", style="green", no_wrap=True)
-    table.add_column("Requires", style="yellow", no_wrap=True)
-    table.add_column("Produces", style="magenta", no_wrap=True)
-    table.add_column("Description", overflow="fold")
+    table.add_column("Requires", style="yellow", max_width=34, overflow="fold")
+    table.add_column("Produces", style="magenta", max_width=28, overflow="fold")
+    table.add_column("Description", ratio=1, overflow="fold")
     for spec in registry.list():
         table.add_row(spec.name, spec.extension_name, spec.requires or "—", spec.produces or "—", spec.description.strip())
     Console(width=220).print(table)
