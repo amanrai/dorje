@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import re
 from typing import Any
 
 import orjson
@@ -49,7 +50,7 @@ def extract_tables_from_html(handle: str, label: str = "") -> dict[str, object]:
         caption = caption_tag.get_text(" ", strip=True) if isinstance(caption_tag, Tag) else ""
         table_html = str(table)
         table_markdown = markdownify(table_html, heading_style="ATX", bullets="-").strip() + "\n"
-        payload = {"table_index": index, "caption": caption, "markdown": table_markdown, "html": table_html}
+        payload = _table_payload(table, table_index=index, caption=caption, markdown=table_markdown, html=table_html)
         output = store.put(
             orjson.dumps(payload, option=orjson.OPT_SORT_KEYS).decode(),
             content_type="application/vnd.dorje.table+json",
@@ -61,6 +62,71 @@ def extract_tables_from_html(handle: str, label: str = "") -> dict[str, object]:
         members.append(member(output))
     collection = store.put_collection(members, label=label or f"{record.label or record.handle} html tables", metadata={"derived_from": record.handle, "extractor": "extract_tables_from_html"}, derivative_type="table_collection")
     return collection_result(record.handle, collection, members)
+
+
+def _table_payload(table: Tag, table_index: int, caption: str, markdown: str, html: str) -> dict[str, object]:
+    matrix = _table_matrix(table)
+    header = matrix[0] if matrix else []
+    data_rows = matrix[1:] if len(matrix) > 1 else []
+    columns = [
+        {"index": idx, "name": name, "type": _infer_column_type([row[idx] if idx < len(row) else "" for row in data_rows])}
+        for idx, name in enumerate(header)
+    ]
+    rows = [{str(idx): _coerce_value(value, columns[idx]["type"] if idx < len(columns) else "string") for idx, value in enumerate(row)} for row in data_rows]
+    return {
+        "schema": "dorje.table.v1",
+        "table_index": table_index,
+        "caption": caption,
+        "columns": columns,
+        "rows": rows,
+        "rows_raw": data_rows,
+        "markdown": markdown,
+        "source": {"format": "html", "html": html},
+    }
+
+
+def _table_matrix(table: Tag) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for tr in table.find_all("tr"):
+        if not isinstance(tr, Tag):
+            continue
+        cells = [cell.get_text(" ", strip=True) for cell in tr.find_all(["th", "td"], recursive=False) if isinstance(cell, Tag)]
+        if cells:
+            rows.append(cells)
+    return rows
+
+
+def _infer_column_type(values: list[str]) -> str:
+    non_empty = [value.strip() for value in values if value.strip()]
+    if not non_empty:
+        return "string"
+    if all(re.fullmatch(r"[-+]?\d+", value.replace(",", "")) for value in non_empty):
+        return "integer"
+    if all(_looks_float(value) for value in non_empty):
+        return "float"
+    if all(value.lower() in ("true", "false", "yes", "no") for value in non_empty):
+        return "boolean"
+    return "string"
+
+
+def _looks_float(value: str) -> bool:
+    normalized = value.replace(",", "")
+    return re.fullmatch(r"[-+]?(?:\d+\.\d*|\d*\.\d+|\d+)(?:[eE][-+]?\d+)?", normalized) is not None
+
+
+def _coerce_value(value: str, column_type: object) -> object:
+    if not isinstance(column_type, str):
+        return value
+    stripped = value.strip()
+    if stripped == "":
+        return None
+    if column_type == "integer":
+        return int(stripped.replace(",", ""))
+    if column_type == "float":
+        return float(stripped.replace(",", ""))
+    if column_type == "boolean":
+        return stripped.lower() in ("true", "yes")
+    return value
 
 
 @tool(description="Fetch images referenced by HTML img tags and store each as a base64 JSON derivative.", produces="image_collection/image")

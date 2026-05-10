@@ -34,7 +34,7 @@ def test_extract_html_tables_and_figures_emit_normalized_json(tmp_path: Path, mo
     monkeypatch.chdir(tmp_path)
     html = tmp_path / "a.html"
     html.write_text(
-        '<table><caption>Cap</caption><tr><td>A</td></tr></table><figure><img src="img.png" alt="Alt"><figcaption>Fig cap</figcaption></figure>',
+        '<table><caption>Cap</caption><tr><th>Year</th><th>Value</th></tr><tr><td>2024</td><td>1.5</td></tr></table><figure><img src="img.png" alt="Alt"><figcaption>Fig cap</figcaption></figure>',
         encoding="utf-8",
     )
     source = HandleStore().put_file_ref(html, "text/html", label="a.html")
@@ -48,7 +48,15 @@ def test_extract_html_tables_and_figures_emit_normalized_json(tmp_path: Path, mo
     table_payload = orjson.loads(table.content)
     assert table.content_type == "application/vnd.dorje.table+json"
     assert table.derivative_type == "table"
+    assert table_payload["schema"] == "dorje.table.v1"
     assert table_payload["caption"] == "Cap"
+    assert table_payload["columns"] == [
+        {"index": 0, "name": "Year", "type": "integer"},
+        {"index": 1, "name": "Value", "type": "float"},
+    ]
+    assert table_payload["rows"] == [{"0": 2024, "1": 1.5}]
+    assert table_payload["rows_raw"] == [["2024", "1.5"]]
+    assert table_payload["source"]["format"] == "html"
     assert "markdown" in table_payload
 
     figure_collection = HandleStore().get(cast(str, figures["handle"]))
