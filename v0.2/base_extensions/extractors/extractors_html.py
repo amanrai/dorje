@@ -129,7 +129,7 @@ def _coerce_value(value: str, column_type: object) -> object:
     return value
 
 
-@tool(description="Fetch images referenced by HTML img tags and store each as a base64 JSON derivative.", produces="collection/image")
+@tool(description="Fetch actual image payloads referenced by HTML img tags and store each as base64 image JSON.", produces="collection/image")
 def get_images_for_html(handle: str, base_url: str = "", label: str = "", max_bytes: int = 10_000_000) -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -158,7 +158,7 @@ def get_images_for_html(handle: str, base_url: str = "", label: str = "", max_by
     return collection_result(record.handle, collection, members)
 
 
-@tool(description="Extract figure/image reference derivatives from a text/html or application/xhtml+xml file_ref handle.", produces="collection/figure")
+@tool(description="Extract document figure records from HTML img/figure elements: src, alt text, caption, and Markdown reference; does not fetch image bytes.", produces="collection/figure")
 def extract_figures_from_html(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
