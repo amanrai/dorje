@@ -62,7 +62,7 @@ def chunk_md(
     return chunks
 
 
-@tool(description="Chunk a Markdown/plaintext handle or collection into paragraph-aligned chunk handles/collection.")
+@tool(description="Chunk a Markdown/plaintext handle or collection into paragraph-aligned chunk handles/collection.", produces="chunk_collection/full_text_chunk")
 def chunk_md_handle(
     handle: str,
     max_chars: int = DEFAULT_MAX_CHARS,

@@ -321,12 +321,13 @@ def tools_list() -> None:
     """List discovered extension tools."""
     registry = load_extensions()
     table = Table(title="Dorje Tools", show_lines=False)
-    table.add_column("Tool", style="bold cyan", overflow="fold")
-    table.add_column("Extension", style="green", overflow="fold")
+    table.add_column("Tool", style="bold cyan", no_wrap=True)
+    table.add_column("Extension", style="green", no_wrap=True)
+    table.add_column("Produces", style="magenta", no_wrap=True)
     table.add_column("Description", overflow="fold")
     for spec in registry.list():
-        table.add_row(spec.name, spec.extension_name, spec.description.strip())
-    Console().print(table)
+        table.add_row(spec.name, spec.extension_name, spec.produces or "—", spec.description.strip())
+    Console(width=140).print(table)
 
 
 @tools_app.command("call")

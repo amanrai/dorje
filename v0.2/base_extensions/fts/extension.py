@@ -11,7 +11,7 @@ FTS_MEDIA_TYPES = {"text/plain", "text/markdown"}
 DEFAULT_PREVIEW_CHARS = 1000
 
 
-@tool(description="Create FTS-compatible full-text derivative handle(s) from indexable text handle(s).")
+@tool(description="Create FTS-compatible full-text derivative handle(s) from indexable text handle(s).", produces="fts_full_text_collection/fts_full_text")
 def get_fts_compatible_handle(handle: str, label: str = "") -> dict[str, object]:
     """Return full-text derivative handle(s) suitable for insertion into SQLite FTS.
 

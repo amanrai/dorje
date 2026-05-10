@@ -17,7 +17,7 @@ HTTP_TIMEOUT_S = 30.0
 MAX_TITLE_CHARS = 200
 
 
-@tool(description="Fetch a Wikipedia page by title, store it as Markdown, and return a content handle.")
+@tool(description="Fetch a Wikipedia page by title, store it as Markdown, and return a content handle.", produces="extracted_markdown")
 def get_from_wikipedia(title: str) -> dict[str, object]:
     """Return a typed Markdown handle for a Wikipedia page."""
     clean_title = _clean_title(title)

@@ -41,7 +41,7 @@ def inspect_collection(handle: str, sample_size: int = DEFAULT_SAMPLE_SIZE) -> d
     }
 
 
-@tool(description="Filter a collection handle by handle axes, media type, derivative type, and path/label glob.")
+@tool(description="Filter a collection handle by handle axes, media type, derivative type, and path/label glob.", produces="filtered_collection")
 def filter_collection(
     handle: str,
     kind: str | None = None,

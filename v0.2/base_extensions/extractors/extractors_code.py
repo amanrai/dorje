@@ -11,7 +11,7 @@ from dorje_sdk import tool
 from extractors_common import CSS_MEDIA_TYPES, JAVASCRIPT_MEDIA_TYPES, PYTHON_MEDIA_TYPES, collection_result, get_file_ref, member
 
 
-@tool(description="Extract Python classes/functions as code symbol derivative handles from a Python file_ref handle.")
+@tool(description="Extract Python classes/functions as code symbol derivative handles from a Python file_ref handle.", produces="code_symbol_collection/code_symbol")
 def extract_python_symbols(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -29,7 +29,7 @@ def extract_python_symbols(handle: str, label: str = "") -> dict[str, object]:
     return collection_result(record.handle, collection, members)
 
 
-@tool(description="Extract JavaScript/TypeScript classes/functions/components as code symbol derivative handles.")
+@tool(description="Extract JavaScript/TypeScript classes/functions/components as code symbol derivative handles.", produces="code_symbol_collection/code_symbol")
 def extract_js_symbols(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -45,7 +45,7 @@ def extract_js_symbols(handle: str, label: str = "") -> dict[str, object]:
     return collection_result(record.handle, collection, members)
 
 
-@tool(description="Extract CSS/SCSS/Sass/Less rule blocks as stylesheet rule derivatives.")
+@tool(description="Extract CSS/SCSS/Sass/Less rule blocks as stylesheet rule derivatives.", produces="style_rule_collection/style_rule")
 def extract_css_rules(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)

@@ -23,7 +23,7 @@ def test_folder_extension_tool(tmp_path: Path) -> None:
     ext_dir.mkdir()
     (ext_dir / "extension.py").write_text(
         "from dorje_sdk import tool\n\n"
-        "@tool(description='Join two strings.')\n"
+        "@tool(description='Join two strings.', produces='joined_text')\n"
         "def join(left, right):\n"
         "    return left + right\n",
         encoding="utf-8",
@@ -32,3 +32,4 @@ def test_folder_extension_tool(tmp_path: Path) -> None:
     registry = load_extensions(roots=(tmp_path,))
 
     assert registry.call("join", {"left": "a", "right": "b"}) == "ab"
+    assert registry.get("join").produces == "joined_text"

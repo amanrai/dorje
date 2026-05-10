@@ -12,7 +12,7 @@ from dorje_sdk import tool
 from extractors_common import collection_result, get_file_ref, handle_result, member
 
 
-@tool(description="Extract Markdown from a text/plain file_ref handle by treating plaintext as indexable Markdown text.")
+@tool(description="Extract Markdown from a text/plain file_ref handle by treating plaintext as indexable Markdown text.", produces="extracted_markdown")
 def extract_plaintext_to_markdown(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -29,7 +29,7 @@ def extract_plaintext_to_markdown(handle: str, label: str = "") -> dict[str, obj
     return handle_result(record.handle, output)
 
 
-@tool(description="Extract indexable Markdown from a text/markdown file_ref handle without changing representation.")
+@tool(description="Extract indexable Markdown from a text/markdown file_ref handle without changing representation.", produces="extracted_markdown")
 def extract_markdown_source(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
@@ -46,7 +46,7 @@ def extract_markdown_source(handle: str, label: str = "") -> dict[str, object]:
     return handle_result(record.handle, output)
 
 
-@tool(description="Extract bibliography/reference entries from a Markdown/plaintext paper file_ref handle.")
+@tool(description="Extract bibliography/reference entries from a Markdown/plaintext paper file_ref handle.", produces="reference_collection/reference")
 def extract_references_from_paper(handle: str, label: str = "") -> dict[str, object]:
     store = HandleStore()
     record = get_file_ref(store, handle)
