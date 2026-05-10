@@ -1,0 +1,2 @@
+name: materialize_code_graph
+description: Materialize code symbol derivatives into symbol graph rows.

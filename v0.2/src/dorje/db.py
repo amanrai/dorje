@@ -151,19 +151,83 @@ def init_schema(conn: apsw.Connection, vector_dim: int = VECTOR_DIM) -> None:
     )
     conn.execute(
         """
-        CREATE TABLE IF NOT EXISTS materialized_artifacts (
+        CREATE TABLE IF NOT EXISTS materialized_tables (
             id TEXT PRIMARY KEY,
             source_handle TEXT NOT NULL,
-            derivative_type TEXT NOT NULL,
-            materializer TEXT NOT NULL,
+            name TEXT NOT NULL,
             payload_json TEXT NOT NULL,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """
     )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_materialized_artifacts_source ON materialized_artifacts(source_handle)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_materialized_artifacts_derivative_type ON materialized_artifacts(derivative_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_materialized_tables_source ON materialized_tables(source_handle)")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS materialized_symbols (
+            id TEXT PRIMARY KEY,
+            source_handle TEXT NOT NULL,
+            symbol_name TEXT NOT NULL,
+            symbol_kind TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_materialized_symbols_source ON materialized_symbols(source_handle)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_materialized_symbols_name ON materialized_symbols(symbol_name)")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS materialized_references (
+            id TEXT PRIMARY KEY,
+            source_handle TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_materialized_references_source ON materialized_references(source_handle)")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS materialized_images (
+            id TEXT PRIMARY KEY,
+            source_handle TEXT NOT NULL,
+            image_media_type TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_materialized_images_source ON materialized_images(source_handle)")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS materialized_figures (
+            id TEXT PRIMARY KEY,
+            source_handle TEXT NOT NULL,
+            caption TEXT NOT NULL DEFAULT '',
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_materialized_figures_source ON materialized_figures(source_handle)")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS materialized_style_rules (
+            id TEXT PRIMARY KEY,
+            source_handle TEXT NOT NULL,
+            selector TEXT NOT NULL DEFAULT '',
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_materialized_style_rules_source ON materialized_style_rules(source_handle)")
     conn.execute(
         f"""
         CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors USING vec0(

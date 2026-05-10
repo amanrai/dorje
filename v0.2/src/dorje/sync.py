@@ -8,6 +8,7 @@ snapshot, and stores the new manifest under `.dorje/source_manifest.json`.
 from __future__ import annotations
 
 import hashlib
+import os
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -16,13 +17,14 @@ from pathlib import Path
 from typing import Any
 
 import orjson
+import yaml
 from bs4 import BeautifulSoup
 from markdownify import markdownify as html_to_markdown
 
 from dorje.content_types import guess_content_type
 from dorje.db import connect, init_schema
+from dorje.extensions import load_extensions
 from dorje.handles import HandleStore
-from dorje.materializers import materialize_corpus
 
 MANIFEST_VERSION = 1
 MANIFEST_PATH = Path(".dorje") / "source_manifest.json"
@@ -396,24 +398,104 @@ def sync_extract(
     return SyncActionResult("sync_extract", resolved_root, added=added, skipped=skipped)
 
 
+DEFAULT_MATERIALIZE_CONFIG: dict[str, list[dict[str, Any]]] = {
+    "extracted_markdown": [{"tool": "materialize_markdown_paragraph_chunks", "args": {"write_fts": True}}],
+    "table": [{"tool": "materialize_table_store", "args": {}}],
+    "figure": [{"tool": "materialize_figure_index", "args": {}}],
+    "image": [{"tool": "materialize_image_registry", "args": {}}],
+    "reference": [{"tool": "materialize_reference_graph", "args": {}}],
+    "code_symbol": [{"tool": "materialize_code_graph", "args": {}}],
+    "style_rule": [{"tool": "materialize_style_rule_index", "args": {}}],
+}
+
+
 def sync_materialize(
     root: Path | None = None,
     progress_callback: Callable[[str, int, int | None], None] | None = None,
     max_chars: int = 2000,
 ) -> SyncActionResult:
-    """Materialize extracted derivatives into queryable local artifacts."""
+    """Materialize extracted derivatives into queryable local artifacts via materializer tools."""
     resolved_root = (root or Path.cwd()).resolve()
-    result = materialize_corpus(resolved_root, max_chars=max_chars, progress_callback=progress_callback)
-    counts = result["counts"]
-    deleted = result["deleted"]
+    store = HandleStore(resolved_root / ".dorje" / "handles")
+    conn = connect(resolved_root / ".dorje" / "dorje.sqlite")
+    init_schema(conn)
+    rows = list(conn.execute("SELECT handle, derivative_type FROM handles WHERE kind='derivative' AND status='active' AND derivative_type IS NOT NULL"))
+    conn.close()
+    config = _load_materialize_config(resolved_root, max_chars=max_chars)
+    registry = load_extensions()
+    results: list[dict[str, Any]] = []
+    skipped = 0
+    previous_cwd = Path.cwd()
+    os.chdir(resolved_root)
+    try:
+        for index, (handle, derivative_type) in enumerate(rows, start=1):
+            if progress_callback is not None:
+                progress_callback(str(handle), index - 1, len(rows))
+            record = store.get(str(handle))
+            entries = config.get(str(derivative_type), [])
+            if not entries:
+                skipped += 1
+                continue
+            for entry in entries:
+                tool_name = entry["tool"]
+                args = dict(entry.get("args", {}))
+                args["handle"] = record.handle
+                result = registry.call(str(tool_name), args)
+                if isinstance(result, dict):
+                    results.append(result)
+                else:
+                    results.append({"tool": tool_name, "result": result})
+    finally:
+        os.chdir(previous_cwd)
+    if progress_callback is not None:
+        progress_callback("done", len(rows), len(rows))
     return SyncActionResult(
         "sync_materialize",
         resolved_root,
-        added=int(counts["text_chunks"]) + int(counts["fts_rows"]) + int(counts["structured_artifacts"]),
-        deleted=int(deleted["chunks"]) + int(deleted["fts_rows"]) + int(deleted["structured_artifacts"]),
-        skipped=int(counts["skipped"]),
-        details=result,
+        added=len(results),
+        skipped=skipped,
+        details={"config": config, "results": results[:100], "results_count": len(results)},
     )
+
+
+def _load_materialize_config(root: Path, max_chars: int) -> dict[str, list[dict[str, Any]]]:
+    path = root / ".dorje" / "materialize.yaml"
+    if path.exists():
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict) or not isinstance(loaded.get("materialize"), dict):
+            raise ValueError(".dorje/materialize.yaml must contain a top-level materialize mapping")
+        config = _normalize_materialize_config(loaded["materialize"])
+    else:
+        config = _normalize_materialize_config(DEFAULT_MATERIALIZE_CONFIG)
+    for entries in config.values():
+        for entry in entries:
+            if str(entry.get("tool", "")).startswith("materialize_markdown_"):
+                args = entry.setdefault("args", {})
+                if isinstance(args, dict):
+                    args.setdefault("max_chars", max_chars)
+    return config
+
+
+def _normalize_materialize_config(raw: object) -> dict[str, list[dict[str, Any]]]:
+    if not isinstance(raw, dict):
+        raise ValueError("materialize config must be a mapping")
+    normalized: dict[str, list[dict[str, Any]]] = {}
+    for derivative_type, entries in raw.items():
+        if not isinstance(derivative_type, str):
+            continue
+        if not isinstance(entries, list):
+            raise ValueError(f"materialize.{derivative_type} must be a list")
+        normalized_entries: list[dict[str, Any]] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise ValueError(f"materialize.{derivative_type} entries must be mappings")
+            tool_name = entry.get("tool", entry.get("materializer"))
+            if not isinstance(tool_name, str):
+                raise ValueError(f"materialize.{derivative_type} entries need a tool string")
+            args = entry.get("args", entry.get("config", {}))
+            normalized_entries.append({"tool": tool_name, "args": dict(args) if isinstance(args, dict) else {}})
+        normalized[derivative_type] = normalized_entries
+    return normalized
 
 
 def sync_fts(

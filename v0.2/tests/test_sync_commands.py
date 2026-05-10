@@ -17,8 +17,9 @@ def test_sync_sources_extract_and_materialize(tmp_path: Path) -> None:
 
     materialized = sync_materialize(tmp_path, max_chars=8)
     assert materialized.action == "sync_materialize"
-    assert materialized.details["counts"]["text_chunks"] == 2
-    assert materialized.details["counts"]["fts_rows"] == 2
+    assert materialized.added == 1
+    assert materialized.details["results"][0]["chunks"] == 2
+    assert materialized.details["results"][0]["fts_rows"] == 2
 
     conn = connect(tmp_path / ".dorje" / "dorje.sqlite")
     init_schema(conn)
@@ -26,10 +27,7 @@ def test_sync_sources_extract_and_materialize(tmp_path: Path) -> None:
     fts_rows = list(conn.execute("SELECT chunk_id FROM chunks_fts WHERE chunk_id LIKE 'chunk_%'"))
     assert len(chunk_rows) == 2
     assert len(fts_rows) == 2
-    conn.execute("INSERT INTO chunks_fts (content, path, chunk_id) VALUES ('stale', 'stale', 'stale_chunk')")
     conn.close()
-
-    assert sync_materialize(tmp_path, max_chars=8).details["deleted"]["fts_rows"] == 1
 
     (tmp_path / "a.txt").unlink()
     sources_2 = sync_sources(tmp_path)
