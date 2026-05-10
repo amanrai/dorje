@@ -150,6 +150,21 @@ def init_schema(conn: apsw.Connection, vector_dim: int = VECTOR_DIM) -> None:
         """
     )
     conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS materialized_artifacts (
+            id TEXT PRIMARY KEY,
+            source_handle TEXT NOT NULL,
+            derivative_type TEXT NOT NULL,
+            materializer TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_materialized_artifacts_source ON materialized_artifacts(source_handle)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_materialized_artifacts_derivative_type ON materialized_artifacts(derivative_type)")
+    conn.execute(
         f"""
         CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors USING vec0(
             chunk_id TEXT PRIMARY KEY,

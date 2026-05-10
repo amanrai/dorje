@@ -22,6 +22,7 @@ from markdownify import markdownify as html_to_markdown
 from dorje.content_types import guess_content_type
 from dorje.db import connect, init_schema
 from dorje.handles import HandleStore
+from dorje.materializers import materialize_corpus
 
 MANIFEST_VERSION = 1
 MANIFEST_PATH = Path(".dorje") / "source_manifest.json"
@@ -402,27 +403,16 @@ def sync_materialize(
 ) -> SyncActionResult:
     """Materialize extracted derivatives into queryable local artifacts."""
     resolved_root = (root or Path.cwd()).resolve()
-
-    def on_chunks(label: str, completed: int, total: int | None) -> None:
-        if progress_callback is not None:
-            progress_callback(f"chunks {label}", completed, total)
-
-    def on_fts(label: str, completed: int, total: int | None) -> None:
-        if progress_callback is not None:
-            progress_callback(f"fts {label}", completed, total)
-
-    chunks = sync_chunks(resolved_root, progress_callback=on_chunks, max_chars=max_chars)
-    fts = sync_fts(resolved_root, progress_callback=on_fts)
-    if progress_callback is not None:
-        progress_callback("done", 1, 1)
+    result = materialize_corpus(resolved_root, max_chars=max_chars, progress_callback=progress_callback)
+    counts = result["counts"]
+    deleted = result["deleted"]
     return SyncActionResult(
         "sync_materialize",
         resolved_root,
-        added=chunks.added + fts.added,
-        retained=chunks.retained + fts.retained,
-        deleted=chunks.deleted + fts.deleted,
-        skipped=chunks.skipped + fts.skipped,
-        details={"chunks": chunks.to_json(), "fts": fts.to_json()},
+        added=int(counts["text_chunks"]) + int(counts["fts_rows"]) + int(counts["structured_artifacts"]),
+        deleted=int(deleted["chunks"]) + int(deleted["fts_rows"]) + int(deleted["structured_artifacts"]),
+        skipped=int(counts["skipped"]),
+        details=result,
     )
 
 
