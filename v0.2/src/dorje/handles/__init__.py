@@ -10,7 +10,7 @@ from dorje.handles.types import (
     IndexState,
     MediaType,
     ProvenanceRole,
-    default_axes_for_stored_content,
+    default_axes_for_derivative,
     file_ref_axes,
 )
 
@@ -25,6 +25,6 @@ __all__ = [
     "IndexState",
     "MediaType",
     "ProvenanceRole",
-    "default_axes_for_stored_content",
+    "default_axes_for_derivative",
     "file_ref_axes",
 ]

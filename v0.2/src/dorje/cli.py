@@ -12,7 +12,8 @@ from dorje.db import connect, init_schema
 from dorje.extensions import load_extensions
 from dorje.hints import HintStore
 from dorje.skills import load_skills
-from dorje.sync import sync_corpus
+from dorje.sync import sync_chunks as sync_chunks_action
+from dorje.sync import sync_corpus, sync_fts as sync_fts_action, sync_sources as sync_sources_action
 from dorje_lm import LMConfig, LMRequest, create_lm_provider
 from dorje_lm.ResponseSchemas import get_response_schema, list_response_schemas
 from dorje.agent_runtime.types import AgentRuntimeKind
@@ -34,15 +35,18 @@ def root(
     query: str | None = typer.Option(None, "-q", "--query", help="Run an agent query."),
     runtime: str = typer.Option("pi", "--runtime", help="Agent runtime: pi or native."),
     logresults: bool = typer.Option(False, "--logresults", help="Log tool result previews."),
+    loglevel: str = typer.Option("all", "--loglevel", help="Agent log level: all, tool_calls, or quiet."),
 ) -> None:
     """Dorje command line."""
     if ctx.invoked_subcommand is not None:
         return
     if query is None:
         return
+    if loglevel not in ("all", "tool_calls", "quiet"):
+        raise typer.BadParameter("loglevel must be all, tool_calls, or quiet")
     agent = create_agent_runtime(AgentRuntimeConfig(kind=_agent_runtime(runtime)))
     try:
-        response = agent.run(AgentRequest(query=query, context={"log_results": logresults}))
+        response = agent.run(AgentRequest(query=query, context={"log_results": logresults, "log_level": loglevel}))
         print(response.content)
     finally:
         agent.close()
@@ -77,6 +81,54 @@ def sync(
     with progress:
         result = sync_corpus(path, glob=glob, progress_callback=on_progress)
     print(orjson.dumps(result.to_json(), option=orjson.OPT_INDENT_2).decode())
+
+
+def _run_sync_action(action, path: Path, quiet: bool, **kwargs: object) -> None:
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.completed:,.0f}/{task.total:,.0f}"),
+        TimeElapsedColumn(),
+        disable=quiet,
+    )
+    task_id = progress.add_task(action.__name__, total=1)
+
+    def on_progress(label: str, completed: int, total: int | None) -> None:
+        progress.update(task_id, total=total or 1, completed=completed, description=f"{action.__name__} {label}")
+
+    with progress:
+        result = action(path, progress_callback=on_progress, **kwargs)
+    print(orjson.dumps(result.to_json(), option=orjson.OPT_INDENT_2).decode())
+
+
+@app.command("sync_sources")
+def sync_sources(
+    path: Path = typer.Argument(Path("."), help="Corpus folder to sync."),
+    glob: str = typer.Option("**/*", "--glob", help="Glob of files to include."),
+    quiet: bool = typer.Option(False, "--quiet", help="Disable progress UI."),
+) -> None:
+    """Sync file_ref source handles in SQLite against files on disk."""
+    _run_sync_action(sync_sources_action, path, quiet, glob=glob)
+
+
+@app.command("sync_fts")
+def sync_fts(
+    path: Path = typer.Argument(Path("."), help="Corpus folder to sync."),
+    quiet: bool = typer.Option(False, "--quiet", help="Disable progress UI."),
+) -> None:
+    """Sync full-file text from file_ref handles into SQLite FTS."""
+    _run_sync_action(sync_fts_action, path, quiet)
+
+
+@app.command("sync_chunks")
+def sync_chunks(
+    path: Path = typer.Argument(Path("."), help="Corpus folder to sync."),
+    max_chars: int = typer.Option(2000, "--max-chars", help="Approximate max characters per chunk."),
+    quiet: bool = typer.Option(False, "--quiet", help="Disable progress UI."),
+) -> None:
+    """Sync paragraph chunks from file_ref handles into SQLite FTS."""
+    _run_sync_action(sync_chunks_action, path, quiet, max_chars=max_chars)
 
 
 @app.command()

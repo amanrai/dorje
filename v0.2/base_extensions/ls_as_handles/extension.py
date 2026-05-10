@@ -67,6 +67,7 @@ def ls_as_handles(
             "returned_count": len(members),
             "truncated": len(files) > len(members),
         },
+        derivative_type="file_ref_collection",
     )
     return {
         "handle": collection.handle,

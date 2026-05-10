@@ -85,6 +85,7 @@ def chunk_md_handle(
             members,
             label=f"{record.label or record.handle} chunks",
             metadata={"derived_from": record.handle, "chunker": "chunk_md_handle"},
+            derivative_type="chunk_collection",
         )
         return {
             "source_handle": record.handle,
@@ -115,7 +116,8 @@ def _chunk_one(
             content=chunk_text,
             content_type=record.content_type,
             label=f"{record.label} chunk {len(output) + 1}",
-            metadata={"derived_from": record.handle, "chunk_id": item["id"]},
+            metadata={"derived_from": record.handle, "chunk_id": item["id"], "full_text": True},
+            derivative_type="full_text_chunk",
         )
         output.append(
             {
@@ -126,6 +128,7 @@ def _chunk_one(
                 "content_type": chunk_record.content_type,
                 "role": chunk_record.role,
                 "index_state": chunk_record.index_state,
+                "derivative_type": chunk_record.derivative_type,
                 "label": chunk_record.label,
                 "start_paragraph": item["start_paragraph"],
                 "end_paragraph": item["end_paragraph"],

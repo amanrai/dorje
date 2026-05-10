@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import orjson
 
-from dorje.handles.types import HandleKind, IndexState, ProvenanceRole, default_axes_for_stored_content, file_ref_axes
+from dorje.handles.types import HandleKind, IndexState, ProvenanceRole, default_axes_for_derivative, file_ref_axes
 
 MAX_CONTENT_CHARS = 5_000_000
 MAX_FILE_TEXT_CHARS = 20_000_000
@@ -31,11 +30,12 @@ class HandleRecord:
     label: str
     content: str
     sha256: str
-    kind: HandleKind = "stored_content"
+    kind: HandleKind = "derivative"
     role: ProvenanceRole = "artifact"
     index_state: IndexState = "indexable"
     path: str | None = None
     members: tuple[dict[str, Any], ...] = ()
+    derivative_type: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -54,24 +54,28 @@ class HandleStore:
         role: ProvenanceRole = "artifact",
         index_state: IndexState | None = None,
         metadata: dict[str, Any] | None = None,
+        derivative_type: str | None = "manual",
     ) -> HandleRecord:
         if not isinstance(content, str):
             raise TypeError("content must be a string")
         if len(content) > MAX_CONTENT_CHARS:
             raise ValueError("content is too large")
-        handle = f"h_{uuid.uuid4().hex}"
         digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
-        axes = default_axes_for_stored_content(content_type)
+        axes = default_axes_for_derivative(content_type)
+        resolved_index_state = index_state or axes.index_state
+        resolved_metadata = metadata or {}
+        handle = f"h_{_identity_hash({'kind': 'derivative', 'content_type': content_type, 'role': role, 'index_state': resolved_index_state, 'derivative_type': derivative_type, 'metadata': resolved_metadata, 'content_sha256': digest})}"
         record = HandleRecord(
             handle=handle,
             content_type=content_type,
             label=label,
             content=content,
             sha256=digest,
-            kind="stored_content",
+            kind="derivative",
             role=role,
-            index_state=index_state or axes.index_state,
-            metadata=metadata or {},
+            index_state=resolved_index_state,
+            derivative_type=derivative_type,
+            metadata=resolved_metadata,
         )
         self._write(record)
         return record
@@ -87,8 +91,8 @@ class HandleStore:
         resolved = path.resolve()
         if not resolved.exists() or not resolved.is_file():
             raise FileNotFoundError(str(path))
-        handle = f"hf_{uuid.uuid4().hex}"
         digest = _sha256_file(resolved)
+        handle = f"hf_{digest}"
         axes = file_ref_axes(content_type, role=role)
         record = HandleRecord(
             handle=handle,
@@ -111,10 +115,12 @@ class HandleStore:
         label: str = "",
         role: ProvenanceRole = "artifact",
         metadata: dict[str, Any] | None = None,
+        derivative_type: str | None = "collection",
     ) -> HandleRecord:
-        handle = f"hc_{uuid.uuid4().hex}"
+        resolved_metadata = metadata or {}
         content = json.dumps(members, ensure_ascii=False, sort_keys=True)
         digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        handle = f"hc_{_identity_hash({'kind': 'collection', 'role': role, 'derivative_type': derivative_type, 'metadata': resolved_metadata, 'members': members})}"
         record = HandleRecord(
             handle=handle,
             content_type="application/vnd.dorje.collection+json",
@@ -125,7 +131,8 @@ class HandleStore:
             role=role,
             index_state="metadata",
             members=tuple(members),
-            metadata=metadata or {},
+            derivative_type=derivative_type,
+            metadata=resolved_metadata,
         )
         self._write(record)
         return record
@@ -136,14 +143,14 @@ class HandleStore:
             raise KeyError(f"unknown handle: {handle}")
         data = orjson.loads(path.read_bytes())
         content_type = str(data.get("content_type", data.get("media_type", "text/plain")))
-        kind = str(data.get("kind", "stored_content"))
+        kind = str(data.get("kind", "derivative"))
         content = str(data.get("content", ""))
         file_path = data.get("path")
         if kind == "file_ref" and isinstance(file_path, str) and content == "" and _is_text_media_type(content_type):
             content = _read_text_file(Path(file_path))
         if kind == "collection" and content == "":
             content = json.dumps(data.get("members", []), ensure_ascii=False, sort_keys=True)
-        axes = default_axes_for_stored_content(content_type) if kind == "stored_content" else None
+        axes = default_axes_for_derivative(content_type) if kind == "derivative" else None
         return HandleRecord(
             handle=str(data["handle"]),
             content_type=content_type,
@@ -155,11 +162,13 @@ class HandleStore:
             index_state=_coerce_index_state(data.get("index_state", axes.index_state if axes else "raw")),
             path=str(file_path) if isinstance(file_path, str) else None,
             members=tuple(data.get("members", ())),
+            derivative_type=str(data["derivative_type"]) if isinstance(data.get("derivative_type"), str) else None,
             metadata=dict(data.get("metadata", {})),
         )
 
     def _write(self, record: HandleRecord) -> None:
-        self._path(record.handle).write_bytes(
+        record_path = self._path(record.handle)
+        record_path.write_bytes(
             orjson.dumps(
                 {
                     "handle": record.handle,
@@ -169,20 +178,70 @@ class HandleStore:
                     "role": record.role,
                     "index_state": record.index_state,
                     "label": record.label,
-                    "content": record.content if record.kind == "stored_content" else "",
+                    "content": record.content if record.kind == "derivative" else "",
                     "path": record.path,
                     "members": list(record.members),
+                    "derivative_type": record.derivative_type,
                     "metadata": record.metadata,
                     "sha256": record.sha256,
                 },
                 option=orjson.OPT_INDENT_2,
             )
         )
+        self._write_sqlite(record, record_path)
+
+    def _write_sqlite(self, record: HandleRecord, record_path: Path) -> None:
+        from dorje.db import connect, init_schema, insert_handle_edge, upsert_handle
+
+        db_path = self._root.parent / "dorje.sqlite"
+        conn = connect(db_path)
+        init_schema(conn)
+        upsert_handle(
+            conn,
+            handle=record.handle,
+            kind=record.kind,
+            media_type=record.content_type,
+            role=record.role,
+            index_state=record.index_state,
+            derivative_type=record.derivative_type,
+            sha256=record.sha256,
+            label=record.label,
+            content_path=str(record_path) if record.kind == "derivative" else None,
+            file_path=record.path,
+            metadata=record.metadata,
+        )
+        derived_from = record.metadata.get("derived_from")
+        parents = derived_from if isinstance(derived_from, list) else [derived_from]
+        for ordinal, parent in enumerate(parents):
+            if isinstance(parent, str) and parent:
+                insert_handle_edge(
+                    conn,
+                    child_handle=record.handle,
+                    parent_handle=parent,
+                    edge_type="derived_from",
+                    ordinal=ordinal,
+                )
+        if record.kind == "collection":
+            for ordinal, member in enumerate(record.members):
+                parent = member.get("handle")
+                if isinstance(parent, str) and parent:
+                    insert_handle_edge(
+                        conn,
+                        child_handle=record.handle,
+                        parent_handle=parent,
+                        edge_type="contains",
+                        ordinal=ordinal,
+                    )
+        conn.close()
 
     def _path(self, handle: str) -> Path:
         if not (handle.startswith("h_") or handle.startswith("hf_") or handle.startswith("hc_")):
             raise ValueError("invalid handle")
         return self._root / f"{handle}.json"
+
+
+def _identity_hash(value: dict[str, Any]) -> str:
+    return hashlib.sha256(orjson.dumps(value, option=orjson.OPT_SORT_KEYS)).hexdigest()
 
 
 def _sha256_file(path: Path) -> str:
@@ -209,9 +268,9 @@ def _read_text_file(path: Path) -> str:
 
 
 def _coerce_kind(value: object) -> HandleKind:
-    if value in ("stored_content", "file_ref", "collection", "index"):
+    if value in ("derivative", "file_ref", "collection", "index"):
         return value  # type: ignore[return-value]
-    return "stored_content"
+    return "derivative"
 
 
 def _coerce_role(value: object) -> ProvenanceRole:

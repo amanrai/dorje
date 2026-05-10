@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-HandleKind = Literal["stored_content", "file_ref", "collection", "index"]
+HandleKind = Literal["derivative", "file_ref", "collection", "index"]
 """How a handle is represented/stored."""
 
 ProvenanceRole = Literal["source", "artifact"]
@@ -79,30 +79,30 @@ class HandleDescriptor:
     metadata: dict[str, object] = field(default_factory=dict)
 
 
-STORED_MARKDOWN_ARTIFACT = HandleAxes(
-    kind="stored_content",
+DERIVATIVE_MARKDOWN_ARTIFACT = HandleAxes(
+    kind="derivative",
     media_type="text/markdown",
     role="artifact",
     index_state="indexable",
 )
 
-STORED_TEXT_ARTIFACT = HandleAxes(
-    kind="stored_content",
+DERIVATIVE_TEXT_ARTIFACT = HandleAxes(
+    kind="derivative",
     media_type="text/plain",
     role="artifact",
     index_state="indexable",
 )
 
 
-def default_axes_for_stored_content(media_type: str) -> HandleAxes:
-    """Infer v0.2-compatible axes for an existing stored-content handle."""
+def default_axes_for_derivative(media_type: str) -> HandleAxes:
+    """Infer axes for a Dorje-produced derivative handle."""
     index_state: IndexState
     if media_type.startswith("text/") or media_type in ("application/json", "application/x-ndjson"):
         index_state = "indexable"
     else:
         index_state = "raw"
     return HandleAxes(
-        kind="stored_content",
+        kind="derivative",
         media_type=media_type,
         role="artifact",
         index_state=index_state,

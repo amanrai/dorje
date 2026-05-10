@@ -22,14 +22,31 @@ const PI_AGENT_PROMPT = path.join(PROJECT_ROOT, "prompts", "pi_agent_system_prom
 
 const processStartedAtMs = Date.now();
 let lastLogAtMs = processStartedAtMs;
+let activeLogLevel = "all";
+
+function shouldLog(message) {
+  if (activeLogLevel === "quiet") {
+    return false;
+  }
+  if (activeLogLevel === "tool_calls") {
+    return message === "tool.end" || message === "dorje_tool.result" || message === "lm.tool_result";
+  }
+  return true;
+}
 
 function log(message, details = undefined) {
+  if (!shouldLog(message)) {
+    return;
+  }
   const nowMs = Date.now();
   const elapsedS = ((nowMs - processStartedAtMs) / 1000).toFixed(3);
   const stepMs = nowMs - lastLogAtMs;
   lastLogAtMs = nowMs;
   const payload = details === undefined ? "" : ` ${JSON.stringify(details)}`;
   process.stderr.write(`[dorje-pi-agent +${elapsedS}s Δ${stepMs}ms] ${message}${payload}\n`);
+  if (activeLogLevel === "tool_calls" && message === "tool.end") {
+    process.stderr.write("────────────────────────────────────────────────────────────────\n");
+  }
 }
 
 function writeJson(value) {
@@ -116,7 +133,7 @@ async function runHook(name, payload = {}) {
     });
     const control = parseHookControl(stdout);
     log("hook.end", { hook: name, payload, output_chars: stdout.length, control });
-    if (stdout.length > 0) {
+    if (stdout.length > 0 && activeLogLevel === "all") {
       process.stderr.write(`[dorje-pi-agent hook.output ${name}]\n${stdout}\n`);
     }
     if (control.force_stop) {
@@ -210,7 +227,9 @@ async function runAgent(request) {
   const agentRunStartedAtMs = Date.now();
   const runId = `run_${crypto.randomUUID()}`;
   const skillUseId = `skill_${crypto.randomUUID()}`;
-  log("run.start", { run_id: runId });
+  const requestedLogLevel = request.context?.log_level;
+  activeLogLevel = requestedLogLevel === "tool_calls" || requestedLogLevel === "quiet" ? requestedLogLevel : "all";
+  log("run.start", { run_id: runId, log_level: activeLogLevel });
   const query = boundedString(request.query, "query");
   const cwd = boundedString(request.cwd || process.cwd(), "cwd");
   const skillsText = boundedString(request.skills_text || "", "skills_text");

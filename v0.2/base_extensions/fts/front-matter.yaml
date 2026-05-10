@@ -1,0 +1,2 @@
+name: fts
+description: Prepare full-text derivative handles for SQLite FTS indexing.

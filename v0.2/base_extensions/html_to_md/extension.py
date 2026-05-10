@@ -43,6 +43,7 @@ def html_handle_to_md_handle(handle: str, strip_scripts: bool = True, label: str
             members,
             label=label or f"{record.label or record.handle} markdown collection",
             metadata={"derived_from": record.handle, "converter": "html_handle_to_md_handle"},
+            derivative_type="markdown_conversion_collection",
         )
         return {
             "source_handle": record.handle,
@@ -64,6 +65,7 @@ def _convert_one(store: HandleStore, record, strip_scripts: bool, label: str) ->
         content_type="text/markdown",
         label=label or f"{record.label or record.handle} markdown",
         metadata={"derived_from": record.handle, "converter": "html_handle_to_md_handle"},
+        derivative_type="markdown_conversion",
     )
     return {
         "source_handle": record.handle,
@@ -72,6 +74,7 @@ def _convert_one(store: HandleStore, record, strip_scripts: bool, label: str) ->
         "content_type": output.content_type,
         "role": output.role,
         "index_state": output.index_state,
+        "derivative_type": output.derivative_type,
         "label": output.label,
         "sha256": output.sha256,
         "char_count": len(output.content),
