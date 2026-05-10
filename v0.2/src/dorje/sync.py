@@ -395,6 +395,37 @@ def sync_extract(
     return SyncActionResult("sync_extract", resolved_root, added=added, skipped=skipped)
 
 
+def sync_materialize(
+    root: Path | None = None,
+    progress_callback: Callable[[str, int, int | None], None] | None = None,
+    max_chars: int = 2000,
+) -> SyncActionResult:
+    """Materialize extracted derivatives into queryable local artifacts."""
+    resolved_root = (root or Path.cwd()).resolve()
+
+    def on_chunks(label: str, completed: int, total: int | None) -> None:
+        if progress_callback is not None:
+            progress_callback(f"chunks {label}", completed, total)
+
+    def on_fts(label: str, completed: int, total: int | None) -> None:
+        if progress_callback is not None:
+            progress_callback(f"fts {label}", completed, total)
+
+    chunks = sync_chunks(resolved_root, progress_callback=on_chunks, max_chars=max_chars)
+    fts = sync_fts(resolved_root, progress_callback=on_fts)
+    if progress_callback is not None:
+        progress_callback("done", 1, 1)
+    return SyncActionResult(
+        "sync_materialize",
+        resolved_root,
+        added=chunks.added + fts.added,
+        retained=chunks.retained + fts.retained,
+        deleted=chunks.deleted + fts.deleted,
+        skipped=chunks.skipped + fts.skipped,
+        details={"chunks": chunks.to_json(), "fts": fts.to_json()},
+    )
+
+
 def sync_fts(
     root: Path | None = None,
     progress_callback: Callable[[str, int, int | None], None] | None = None,

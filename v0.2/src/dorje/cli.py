@@ -14,8 +14,7 @@ from dorje.db import connect, init_schema
 from dorje.extensions import load_extensions
 from dorje.hints import HintStore
 from dorje.skills import load_skills
-from dorje.sync import sync_chunks as sync_chunks_action
-from dorje.sync import sync_corpus, sync_extract as sync_extract_action, sync_fts as sync_fts_action
+from dorje.sync import sync_corpus, sync_extract as sync_extract_action, sync_materialize as sync_materialize_action
 from dorje.sync import sync_sources as sync_sources_action
 from dorje.sync import sync_summary as sync_summary_action
 from dorje_lm import LMConfig, LMRequest, create_lm_provider
@@ -105,12 +104,11 @@ def _print_sync_help() -> None:
                 "dorje sync summary           Show SQLite counts for handles, edges, chunks, and FTS rows.",
                 "dorje sync sources           Reconcile file_ref source handles against files on disk.",
                 "dorje sync extract           Extract supported file_ref sources into Markdown derivatives.",
-                "dorje sync chunks            Chunk Markdown derivatives into SQLite chunk rows.",
-                "dorje sync fts               Sync chunk rows into SQLite FTS rows.",
+                "dorje sync materialize       Materialize extracted derivatives into queryable local artifacts.",
                 "dorje sync manifest          Legacy/current JSON manifest sync.",
                 "",
                 "Typical sequence:",
-                "dorje sync sources && dorje sync extract && dorje sync chunks && dorje sync fts",
+                "dorje sync sources && dorje sync extract && dorje sync materialize",
             ]
         )
     )
@@ -144,7 +142,7 @@ def fts_search(
     """Search the SQLite full-text index."""
     db_path = path.resolve() / ".dorje" / "dorje.sqlite"
     if not db_path.exists():
-        print(orjson.dumps({"exists": False, "message": "No FTS index exists. Run dorje sync sources, sync extract, sync chunks, and sync fts first."}, option=orjson.OPT_INDENT_2).decode())
+        print(orjson.dumps({"exists": False, "message": "No FTS index exists. Run dorje sync sources, sync extract, and sync materialize first."}, option=orjson.OPT_INDENT_2).decode())
         return
     conn = connect(db_path)
     init_schema(conn)
@@ -202,23 +200,14 @@ def sync_extract(
     _run_sync_action(sync_extract_action, path, quiet)
 
 
-@sync_app.command("fts")
-def sync_fts(
+@sync_app.command("materialize")
+def sync_materialize(
     path: Path = typer.Argument(Path("."), help="Corpus folder to sync."),
+    max_chars: int = typer.Option(2000, "--max-chars", help="Approximate max characters per text materialization chunk."),
     quiet: bool = typer.Option(False, "--quiet", help="Disable progress UI."),
 ) -> None:
-    """Sync chunk rows into SQLite FTS."""
-    _run_sync_action(sync_fts_action, path, quiet)
-
-
-@sync_app.command("chunks")
-def sync_chunks(
-    path: Path = typer.Argument(Path("."), help="Corpus folder to sync."),
-    max_chars: int = typer.Option(2000, "--max-chars", help="Approximate max characters per chunk."),
-    quiet: bool = typer.Option(False, "--quiet", help="Disable progress UI."),
-) -> None:
-    """Sync paragraph chunks from Markdown derivatives."""
-    _run_sync_action(sync_chunks_action, path, quiet, max_chars=max_chars)
+    """Materialize extracted derivatives into queryable local artifacts."""
+    _run_sync_action(sync_materialize_action, path, quiet, max_chars=max_chars)
 
 
 @app.command()
