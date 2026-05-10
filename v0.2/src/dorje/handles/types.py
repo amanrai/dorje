@@ -97,7 +97,7 @@ DERIVATIVE_TEXT_ARTIFACT = HandleAxes(
 def default_axes_for_derivative(media_type: str) -> HandleAxes:
     """Infer axes for a Dorje-produced derivative handle."""
     index_state: IndexState
-    if media_type.startswith("text/") or media_type in ("application/json", "application/x-ndjson"):
+    if media_type.startswith("text/") or media_type in ("application/json", "application/x-ndjson", "application/xml", "application/yaml", "application/toml"):
         index_state = "indexable"
     else:
         index_state = "raw"
@@ -111,5 +111,5 @@ def default_axes_for_derivative(media_type: str) -> HandleAxes:
 
 def file_ref_axes(media_type: str, role: ProvenanceRole = "source") -> HandleAxes:
     """Construct axes for an uncopied file reference handle."""
-    index_state: IndexState = "indexable" if media_type.startswith("text/") else "raw"
+    index_state: IndexState = "indexable" if media_type.startswith("text/") or media_type in ("application/json", "application/x-ndjson", "application/xml", "application/yaml", "application/toml", "application/xhtml+xml") else "raw"
     return HandleAxes(kind="file_ref", media_type=media_type, role=role, index_state=index_state)

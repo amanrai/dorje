@@ -24,6 +24,9 @@ def test_handle_store_writes_handles_and_edges_to_sqlite(tmp_path: Path) -> None
     assert source.handle in handles
     assert derivative.handle in handles
     assert collection.handle in handles
+    payload = conn.execute("SELECT content_text FROM handle_payloads WHERE handle=?", (derivative.handle,)).fetchone()
+    assert payload == ("# A",)
+    assert not (tmp_path / ".dorje" / "handles" / f"{derivative.handle}.json").exists()
     edge = conn.execute(
         "SELECT child_handle, parent_handle, edge_type FROM handle_edges WHERE child_handle=? AND parent_handle=?",
         (derivative.handle, source.handle),

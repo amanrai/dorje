@@ -8,7 +8,6 @@ snapshot, and stores the new manifest under `.dorje/source_manifest.json`.
 from __future__ import annotations
 
 import hashlib
-import mimetypes
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -17,7 +16,10 @@ from pathlib import Path
 from typing import Any
 
 import orjson
+from bs4 import BeautifulSoup
+from markdownify import markdownify as html_to_markdown
 
+from dorje.content_types import guess_content_type
 from dorje.db import connect, init_schema
 from dorje.handles import HandleStore
 
@@ -104,7 +106,7 @@ def sync_corpus(
         rel = file_path.relative_to(resolved_root).as_posix()
         stat = file_path.stat()
         digest = _sha256_file(file_path)
-        media_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+        media_type = guess_content_type(file_path)
         previous_entry = previous_sources.get(digest)
         handle = None
         if isinstance(previous_entry, dict):
@@ -264,6 +266,49 @@ def _write_sync_sqlite(
     conn.close()
 
 
+def sync_summary(root: Path | None = None) -> dict[str, Any]:
+    """Return counts of handles and index rows in the corpus SQLite DB."""
+    resolved_root = (root or Path.cwd()).resolve()
+    db_path = resolved_root / ".dorje" / "dorje.sqlite"
+    if not db_path.exists():
+        return {
+            "root": str(resolved_root),
+            "db_path": str(db_path),
+            "exists": False,
+            "message": "Nothing exists yet. Run dorje sync_sources first.",
+            "handles_total": 0,
+            "handles_by_kind": {},
+            "handles_by_media_type": {},
+            "handles_by_derivative_type": {},
+            "handles_by_index_state": {},
+            "edges_by_type": {},
+            "source_paths_by_status": {},
+            "chunks_total": 0,
+            "fts_rows_total": 0,
+        }
+    conn = connect(db_path)
+    init_schema(conn)
+    summary: dict[str, Any] = {
+        "root": str(resolved_root),
+        "db_path": str(db_path),
+        "exists": True,
+        "handles_total": _count_scalar(conn, "SELECT count(*) FROM handles"),
+        "handles_by_kind": _count_rows(conn, "SELECT kind, count(*) FROM handles GROUP BY kind ORDER BY kind"),
+        "handles_by_media_type": _count_rows(conn, "SELECT media_type, count(*) FROM handles GROUP BY media_type ORDER BY media_type"),
+        "handles_by_derivative_type": _count_rows(
+            conn,
+            "SELECT coalesce(derivative_type, '<none>'), count(*) FROM handles GROUP BY coalesce(derivative_type, '<none>') ORDER BY 1",
+        ),
+        "handles_by_index_state": _count_rows(conn, "SELECT index_state, count(*) FROM handles GROUP BY index_state ORDER BY index_state"),
+        "edges_by_type": _count_rows(conn, "SELECT edge_type, count(*) FROM handle_edges GROUP BY edge_type ORDER BY edge_type"),
+        "source_paths_by_status": _count_rows(conn, "SELECT status, count(*) FROM source_paths GROUP BY status ORDER BY status"),
+        "chunks_total": _count_scalar(conn, "SELECT count(*) FROM chunks"),
+        "fts_rows_total": _count_scalar(conn, "SELECT count(*) FROM chunks_fts"),
+    }
+    conn.close()
+    return summary
+
+
 def sync_sources(
     root: Path | None = None,
     glob: str = "**/*",
@@ -281,7 +326,7 @@ def sync_sources(
     for index, file_path in enumerate(files, start=1):
         if progress_callback is not None:
             progress_callback(file_path.relative_to(resolved_root).as_posix(), index - 1, len(files))
-        media_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+        media_type = guess_content_type(file_path)
         handle_record = store.put_file_ref(
             file_path,
             content_type=media_type,
@@ -312,44 +357,67 @@ def sync_sources(
     return SyncActionResult("sync_sources", resolved_root, added=added, retained=retained, deleted=deleted)
 
 
-def sync_fts(
+def sync_extract(
     root: Path | None = None,
     progress_callback: Callable[[str, int, int | None], None] | None = None,
 ) -> SyncActionResult:
-    """Sync full-file text from active file_ref handles into SQLite FTS."""
+    """Extract active file_ref sources into indexable Markdown derivatives."""
     resolved_root = (root or Path.cwd()).resolve()
+    store = HandleStore(resolved_root / ".dorje" / "handles")
     conn = connect(resolved_root / ".dorje" / "dorje.sqlite")
     init_schema(conn)
     rows = list(conn.execute("SELECT handle, file_path, media_type FROM handles WHERE kind='file_ref' AND status='active'"))
-    active_ids: set[str] = set()
     added = 0
     skipped = 0
     for index, (handle, file_path, media_type) in enumerate(rows, start=1):
         if progress_callback is not None:
             progress_callback(str(file_path), index - 1, len(rows))
-        chunk_id = f"fts_{handle}"
         path = Path(str(file_path))
-        if not path.exists() or not _is_readable_text_media_type(str(media_type)):
+        if not path.exists():
             skipped += 1
             continue
-        content = _read_text_file(path)
-        conn.execute(
-            """
-            INSERT INTO chunks (id, path, start_line, end_line, content, metadata_json)
-            VALUES (?, ?, 0, 0, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET path=excluded.path, content=excluded.content, metadata_json=excluded.metadata_json
-            """,
-            (chunk_id, str(path), content, orjson.dumps({"source_handle": handle, "sync": "fts"}).decode()),
+        markdown = _extract_markdown(path, str(media_type))
+        if markdown is None:
+            skipped += 1
+            continue
+        store.put(
+            markdown,
+            content_type="text/markdown",
+            label=f"{path.name} extracted markdown",
+            index_state="indexable",
+            metadata={"derived_from": str(handle), "extractor": "sync_extract", "source_media_type": str(media_type)},
+            derivative_type="extracted_markdown",
         )
-        conn.execute("DELETE FROM chunks_fts WHERE chunk_id=?", (chunk_id,))
-        conn.execute("INSERT INTO chunks_fts (content, path, chunk_id) VALUES (?, ?, ?)", (content, str(path), chunk_id))
-        active_ids.add(chunk_id)
         added += 1
-    deleted = _delete_stale_chunks(conn, "fts_", active_ids)
     if progress_callback is not None:
         progress_callback("done", len(rows), len(rows))
     conn.close()
-    return SyncActionResult("sync_fts", resolved_root, added=added, deleted=deleted, skipped=skipped)
+    return SyncActionResult("sync_extract", resolved_root, added=added, skipped=skipped)
+
+
+def sync_fts(
+    root: Path | None = None,
+    progress_callback: Callable[[str, int, int | None], None] | None = None,
+) -> SyncActionResult:
+    """Ensure chunk-level SQLite FTS is synced from chunk rows only."""
+    resolved_root = (root or Path.cwd()).resolve()
+    conn = connect(resolved_root / ".dorje" / "dorje.sqlite")
+    init_schema(conn)
+    rows = list(conn.execute("SELECT id, path, content FROM chunks WHERE id LIKE 'chunk_%'"))
+    active_ids: set[str] = set()
+    added = 0
+    for index, (chunk_id, path, content) in enumerate(rows, start=1):
+        if progress_callback is not None:
+            progress_callback(str(chunk_id), index - 1, len(rows))
+        conn.execute("DELETE FROM chunks_fts WHERE chunk_id=?", (chunk_id,))
+        conn.execute("INSERT INTO chunks_fts (content, path, chunk_id) VALUES (?, ?, ?)", (content, path, chunk_id))
+        active_ids.add(str(chunk_id))
+        added += 1
+    deleted = _delete_stale_fts_rows(conn, active_ids)
+    if progress_callback is not None:
+        progress_callback("done", len(rows), len(rows))
+    conn.close()
+    return SyncActionResult("sync_fts", resolved_root, added=added, deleted=deleted)
 
 
 def sync_chunks(
@@ -357,22 +425,23 @@ def sync_chunks(
     max_chars: int = 2000,
     progress_callback: Callable[[str, int, int | None], None] | None = None,
 ) -> SyncActionResult:
-    """Sync paragraph chunks from active file_ref handles into SQLite FTS."""
+    """Sync chunks from active Markdown derivative handles into SQLite FTS."""
     resolved_root = (root or Path.cwd()).resolve()
+    store = HandleStore(resolved_root / ".dorje" / "handles")
     conn = connect(resolved_root / ".dorje" / "dorje.sqlite")
     init_schema(conn)
-    rows = list(conn.execute("SELECT handle, file_path, media_type FROM handles WHERE kind='file_ref' AND status='active'"))
+    rows = list(conn.execute("SELECT handle FROM handles WHERE kind='derivative' AND media_type='text/markdown' AND status='active'"))
     active_ids: set[str] = set()
     added = 0
     skipped = 0
-    for index, (handle, file_path, media_type) in enumerate(rows, start=1):
+    for index, (handle,) in enumerate(rows, start=1):
         if progress_callback is not None:
-            progress_callback(str(file_path), index - 1, len(rows))
-        path = Path(str(file_path))
-        if not path.exists() or not _is_readable_text_media_type(str(media_type)):
+            progress_callback(str(handle), index - 1, len(rows))
+        record = store.get(str(handle))
+        if record.content_type != "text/markdown":
             skipped += 1
             continue
-        for chunk_index, chunk in enumerate(_chunk_text(_read_text_file(path), max_chars=max_chars)):
+        for chunk_index, chunk in enumerate(_chunk_text(record.content, max_chars=max_chars)):
             chunk_id = f"chunk_{handle}_{chunk_index}"
             conn.execute(
                 """
@@ -380,10 +449,8 @@ def sync_chunks(
                 VALUES (?, ?, 0, 0, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET path=excluded.path, content=excluded.content, metadata_json=excluded.metadata_json
                 """,
-                (chunk_id, str(path), chunk, orjson.dumps({"source_handle": handle, "chunk_index": chunk_index, "sync": "chunks"}).decode()),
+                (chunk_id, record.label, chunk, orjson.dumps({"source_handle": handle, "chunk_index": chunk_index, "sync": "chunks"}).decode()),
             )
-            conn.execute("DELETE FROM chunks_fts WHERE chunk_id=?", (chunk_id,))
-            conn.execute("INSERT INTO chunks_fts (content, path, chunk_id) VALUES (?, ?, ?)", (chunk, str(path), chunk_id))
             active_ids.add(chunk_id)
             added += 1
     deleted = _delete_stale_chunks(conn, "chunk_", active_ids)
@@ -391,6 +458,28 @@ def sync_chunks(
         progress_callback("done", len(rows), len(rows))
     conn.close()
     return SyncActionResult("sync_chunks", resolved_root, added=added, deleted=deleted, skipped=skipped)
+
+
+def _count_scalar(conn, query: str) -> int:
+    row = conn.execute(query).fetchone()
+    if row is None:
+        return 0
+    return int(row[0])
+
+
+def _count_rows(conn, query: str) -> dict[str, int]:
+    return {str(key): int(count) for key, count in conn.execute(query)}
+
+
+def _delete_stale_fts_rows(conn, active_ids: set[str]) -> int:
+    existing = [row[0] for row in conn.execute("SELECT chunk_id FROM chunks_fts")]
+    deleted = 0
+    for chunk_id in existing:
+        if chunk_id in active_ids:
+            continue
+        conn.execute("DELETE FROM chunks_fts WHERE chunk_id=?", (chunk_id,))
+        deleted += 1
+    return deleted
 
 
 def _delete_stale_chunks(conn, prefix: str, active_ids: set[str]) -> int:
@@ -403,6 +492,20 @@ def _delete_stale_chunks(conn, prefix: str, active_ids: set[str]) -> int:
         conn.execute("DELETE FROM chunks WHERE id=?", (chunk_id,))
         deleted += 1
     return deleted
+
+
+def _extract_markdown(path: Path, media_type: str) -> str | None:
+    if media_type == "text/markdown":
+        return _read_text_file(path)
+    if media_type == "text/plain":
+        return _read_text_file(path)
+    if media_type in ("text/html", "application/xhtml+xml"):
+        html = _read_text_file(path)
+        soup = BeautifulSoup(html, "html.parser")
+        for tag in soup(["script", "style", "noscript", "template"]):
+            tag.decompose()
+        return html_to_markdown(str(soup), heading_style="ATX", bullets="-").strip() + "\n"
+    return None
 
 
 def _read_text_file(path: Path) -> str:
@@ -428,7 +531,7 @@ def _chunk_text(text: str, max_chars: int) -> list[str]:
 
 
 def _is_readable_text_media_type(media_type: str) -> bool:
-    return media_type.startswith("text/") or media_type in {"application/json", "application/x-ndjson", "application/xml", "application/xhtml+xml"}
+    return media_type.startswith("text/") or media_type in {"application/json", "application/x-ndjson", "application/xml", "application/xhtml+xml", "application/yaml", "application/toml"}
 
 
 def _load_manifest(path: Path) -> dict[str, Any]:
@@ -459,11 +562,13 @@ def _sha256_file(path: Path) -> str:
 
 
 def _is_indexable_media_type(media_type: str) -> bool:
-    return media_type in {
-        "text/markdown",
-        "text/plain",
+    return media_type.startswith("text/") or media_type in {
         "application/json",
         "application/x-ndjson",
+        "application/xml",
+        "application/xhtml+xml",
+        "application/yaml",
+        "application/toml",
     }
 
 

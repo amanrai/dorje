@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import mimetypes
 from pathlib import Path
 from typing import Any
 
+from dorje.content_types import guess_content_type
 from dorje.handles import HandleStore
 from dorje_sdk import tool
 
@@ -33,7 +33,7 @@ def ls_as_handles(
     store = HandleStore()
     members: list[dict[str, Any]] = []
     for file_path in limited:
-        media_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+        media_type = guess_content_type(file_path)
         record = store.put_file_ref(
             file_path,
             content_type=media_type,

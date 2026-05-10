@@ -44,7 +44,7 @@ class HandleStore:
 
     def __init__(self, root: Path | None = None) -> None:
         self._root = root if root is not None else Path.cwd() / ".dorje" / "handles"
-        self._root.mkdir(parents=True, exist_ok=True)
+        self._root.parent.mkdir(parents=True, exist_ok=True)
 
     def put(
         self,
@@ -138,60 +138,64 @@ class HandleStore:
         return record
 
     def get(self, handle: str) -> HandleRecord:
-        path = self._path(handle)
-        if not path.exists():
+        from dorje.db import connect, init_schema
+
+        conn = connect(self._root.parent / "dorje.sqlite")
+        init_schema(conn)
+        row = conn.execute(
+            """
+            SELECT handle, kind, media_type, role, index_state, derivative_type,
+                   sha256, label, file_path, metadata_json
+            FROM handles WHERE handle=?
+            """,
+            (handle,),
+        ).fetchone()
+        if row is None:
+            conn.close()
             raise KeyError(f"unknown handle: {handle}")
-        data = orjson.loads(path.read_bytes())
-        content_type = str(data.get("content_type", data.get("media_type", "text/plain")))
-        kind = str(data.get("kind", "derivative"))
-        content = str(data.get("content", ""))
-        file_path = data.get("path")
-        if kind == "file_ref" and isinstance(file_path, str) and content == "" and _is_text_media_type(content_type):
+        payload_row = conn.execute("SELECT content_text FROM handle_payloads WHERE handle=?", (handle,)).fetchone()
+        edge_rows = list(
+            conn.execute(
+                "SELECT parent_handle FROM handle_edges WHERE child_handle=? AND edge_type='contains' ORDER BY ordinal",
+                (handle,),
+            )
+        )
+        conn.close()
+        handle_value, kind, media_type, role, index_state, derivative_type, sha256, label, file_path, metadata_json = row
+        content = str(payload_row[0]) if payload_row is not None and payload_row[0] is not None else ""
+        members: tuple[dict[str, Any], ...] = ()
+        if kind == "collection":
+            loaded_members = orjson.loads(content) if content else []
+            if isinstance(loaded_members, list):
+                members = tuple(member for member in loaded_members if isinstance(member, dict))
+            elif edge_rows:
+                members = tuple({"handle": str(edge[0])} for edge in edge_rows)
+            if content == "":
+                content = json.dumps(list(members), ensure_ascii=False, sort_keys=True)
+        if kind == "file_ref" and isinstance(file_path, str) and content == "" and _is_text_media_type(str(media_type)):
             content = _read_text_file(Path(file_path))
-        if kind == "collection" and content == "":
-            content = json.dumps(data.get("members", []), ensure_ascii=False, sort_keys=True)
-        axes = default_axes_for_derivative(content_type) if kind == "derivative" else None
+        metadata = orjson.loads(metadata_json) if isinstance(metadata_json, str) and metadata_json else {}
+        axes = default_axes_for_derivative(str(media_type)) if kind == "derivative" else None
         return HandleRecord(
-            handle=str(data["handle"]),
-            content_type=content_type,
-            label=str(data.get("label", "")),
+            handle=str(handle_value),
+            content_type=str(media_type),
+            label=str(label),
             content=content,
-            sha256=str(data.get("sha256", "")),
+            sha256=str(sha256),
             kind=_coerce_kind(kind),
-            role=_coerce_role(data.get("role", axes.role if axes else "source")),
-            index_state=_coerce_index_state(data.get("index_state", axes.index_state if axes else "raw")),
+            role=_coerce_role(role if role is not None else (axes.role if axes else "source")),
+            index_state=_coerce_index_state(index_state if index_state is not None else (axes.index_state if axes else "raw")),
             path=str(file_path) if isinstance(file_path, str) else None,
-            members=tuple(data.get("members", ())),
-            derivative_type=str(data["derivative_type"]) if isinstance(data.get("derivative_type"), str) else None,
-            metadata=dict(data.get("metadata", {})),
+            members=members,
+            derivative_type=str(derivative_type) if isinstance(derivative_type, str) else None,
+            metadata=dict(metadata) if isinstance(metadata, dict) else {},
         )
 
     def _write(self, record: HandleRecord) -> None:
-        record_path = self._path(record.handle)
-        record_path.write_bytes(
-            orjson.dumps(
-                {
-                    "handle": record.handle,
-                    "kind": record.kind,
-                    "content_type": record.content_type,
-                    "media_type": record.content_type,
-                    "role": record.role,
-                    "index_state": record.index_state,
-                    "label": record.label,
-                    "content": record.content if record.kind == "derivative" else "",
-                    "path": record.path,
-                    "members": list(record.members),
-                    "derivative_type": record.derivative_type,
-                    "metadata": record.metadata,
-                    "sha256": record.sha256,
-                },
-                option=orjson.OPT_INDENT_2,
-            )
-        )
-        self._write_sqlite(record, record_path)
+        self._write_sqlite(record)
 
-    def _write_sqlite(self, record: HandleRecord, record_path: Path) -> None:
-        from dorje.db import connect, init_schema, insert_handle_edge, upsert_handle
+    def _write_sqlite(self, record: HandleRecord) -> None:
+        from dorje.db import connect, init_schema, insert_handle_edge, upsert_handle, upsert_handle_payload
 
         db_path = self._root.parent / "dorje.sqlite"
         conn = connect(db_path)
@@ -206,10 +210,14 @@ class HandleStore:
             derivative_type=record.derivative_type,
             sha256=record.sha256,
             label=record.label,
-            content_path=str(record_path) if record.kind == "derivative" else None,
+            content_path=None,
             file_path=record.path,
             metadata=record.metadata,
         )
+        if record.kind == "derivative":
+            upsert_handle_payload(conn, handle=record.handle, content_text=record.content)
+        if record.kind == "collection":
+            upsert_handle_payload(conn, handle=record.handle, content_text=json.dumps(list(record.members), ensure_ascii=False, sort_keys=True))
         derived_from = record.metadata.get("derived_from")
         parents = derived_from if isinstance(derived_from, list) else [derived_from]
         for ordinal, parent in enumerate(parents):
@@ -258,6 +266,8 @@ def _is_text_media_type(content_type: str) -> bool:
         "application/x-ndjson",
         "application/xml",
         "application/xhtml+xml",
+        "application/yaml",
+        "application/toml",
     }
 
 

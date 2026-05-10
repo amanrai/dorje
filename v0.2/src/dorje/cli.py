@@ -4,7 +4,9 @@ from typing import Literal
 import orjson
 import typer
 from rich import print
+from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+from rich.table import Table
 
 from dorje import __version__
 from dorje.agent_runtime import AgentRequest, AgentRuntimeConfig, create_agent_runtime
@@ -13,7 +15,9 @@ from dorje.extensions import load_extensions
 from dorje.hints import HintStore
 from dorje.skills import load_skills
 from dorje.sync import sync_chunks as sync_chunks_action
-from dorje.sync import sync_corpus, sync_fts as sync_fts_action, sync_sources as sync_sources_action
+from dorje.sync import sync_corpus, sync_extract as sync_extract_action, sync_fts as sync_fts_action
+from dorje.sync import sync_sources as sync_sources_action
+from dorje.sync import sync_summary as sync_summary_action
 from dorje_lm import LMConfig, LMRequest, create_lm_provider
 from dorje_lm.ResponseSchemas import get_response_schema, list_response_schemas
 from dorje.agent_runtime.types import AgentRuntimeKind
@@ -23,10 +27,12 @@ lm_app = typer.Typer(no_args_is_help=True)
 tools_app = typer.Typer(no_args_is_help=True)
 skills_app = typer.Typer(no_args_is_help=True)
 hints_app = typer.Typer(no_args_is_help=True)
+sync_app = typer.Typer(no_args_is_help=True)
 app.add_typer(lm_app, name="lm")
 app.add_typer(tools_app, name="tools")
 app.add_typer(skills_app, name="skills")
 app.add_typer(hints_app, name="hints")
+app.add_typer(sync_app, name="sync")
 
 
 @app.callback(invoke_without_command=True)
@@ -58,13 +64,13 @@ def version() -> None:
     print(__version__)
 
 
-@app.command()
-def sync(
+@sync_app.command("manifest")
+def sync_manifest(
     path: Path = typer.Argument(Path("."), help="Corpus folder to sync."),
     glob: str = typer.Option("**/*", "--glob", help="Glob of files to include."),
     quiet: bool = typer.Option(False, "--quiet", help="Disable progress UI."),
 ) -> None:
-    """Build/update the corpus source manifest and report changes."""
+    """Build/update the legacy source manifest and report changes."""
     progress = Progress(
         SpinnerColumn(),
         TextColumn("[bold blue]{task.description}"),
@@ -81,6 +87,33 @@ def sync(
     with progress:
         result = sync_corpus(path, glob=glob, progress_callback=on_progress)
     print(orjson.dumps(result.to_json(), option=orjson.OPT_INDENT_2).decode())
+
+
+@sync_app.command("help")
+def sync_help() -> None:
+    """Show available sync commands."""
+    _print_sync_help()
+
+
+def _print_sync_help() -> None:
+    print(
+        "\n".join(
+            [
+                "Available Dorje sync commands:",
+                "",
+                "dorje sync help              Show this help.",
+                "dorje sync summary           Show SQLite counts for handles, edges, chunks, and FTS rows.",
+                "dorje sync sources           Reconcile file_ref source handles against files on disk.",
+                "dorje sync extract           Extract supported file_ref sources into Markdown derivatives.",
+                "dorje sync chunks            Chunk Markdown derivatives into SQLite chunk rows.",
+                "dorje sync fts               Sync chunk rows into SQLite FTS rows.",
+                "dorje sync manifest          Legacy/current JSON manifest sync.",
+                "",
+                "Typical sequence:",
+                "dorje sync sources && dorje sync extract && dorje sync chunks && dorje sync fts",
+            ]
+        )
+    )
 
 
 def _run_sync_action(action, path: Path, quiet: bool, **kwargs: object) -> None:
@@ -102,7 +135,55 @@ def _run_sync_action(action, path: Path, quiet: bool, **kwargs: object) -> None:
     print(orjson.dumps(result.to_json(), option=orjson.OPT_INDENT_2).decode())
 
 
-@app.command("sync_sources")
+@app.command("fts")
+def fts_search(
+    query: str = typer.Option(..., "-q", "--query", help="FTS query."),
+    path: Path = typer.Argument(Path("."), help="Corpus folder."),
+    limit: int = typer.Option(10, "--limit", help="Maximum results."),
+) -> None:
+    """Search the SQLite full-text index."""
+    db_path = path.resolve() / ".dorje" / "dorje.sqlite"
+    if not db_path.exists():
+        print(orjson.dumps({"exists": False, "message": "No FTS index exists. Run dorje sync sources, sync extract, sync chunks, and sync fts first."}, option=orjson.OPT_INDENT_2).decode())
+        return
+    conn = connect(db_path)
+    init_schema(conn)
+    rows = list(
+        conn.execute(
+            """
+            SELECT chunk_id, path, snippet(chunks_fts, 0, '[', ']', ' … ', 12) AS snippet,
+                   bm25(chunks_fts) AS score
+            FROM chunks_fts
+            WHERE chunks_fts MATCH ?
+            ORDER BY score
+            LIMIT ?
+            """,
+            (query, limit),
+        )
+    )
+    conn.close()
+    print(
+        orjson.dumps(
+            {
+                "query": query,
+                "count": len(rows),
+                "results": [
+                    {"chunk_id": row[0], "path": row[1], "snippet": row[2], "score": row[3]}
+                    for row in rows
+                ],
+            },
+            option=orjson.OPT_INDENT_2,
+        ).decode()
+    )
+
+
+@sync_app.command("summary")
+def sync_summary(path: Path = typer.Argument(Path("."), help="Corpus folder.")) -> None:
+    """Show counts of handles, edges, source paths, chunks, and FTS rows."""
+    print(orjson.dumps(sync_summary_action(path), option=orjson.OPT_INDENT_2).decode())
+
+
+@sync_app.command("sources")
 def sync_sources(
     path: Path = typer.Argument(Path("."), help="Corpus folder to sync."),
     glob: str = typer.Option("**/*", "--glob", help="Glob of files to include."),
@@ -112,22 +193,31 @@ def sync_sources(
     _run_sync_action(sync_sources_action, path, quiet, glob=glob)
 
 
-@app.command("sync_fts")
+@sync_app.command("extract")
+def sync_extract(
+    path: Path = typer.Argument(Path("."), help="Corpus folder to sync."),
+    quiet: bool = typer.Option(False, "--quiet", help="Disable progress UI."),
+) -> None:
+    """Extract file_ref source handles into Markdown derivatives."""
+    _run_sync_action(sync_extract_action, path, quiet)
+
+
+@sync_app.command("fts")
 def sync_fts(
     path: Path = typer.Argument(Path("."), help="Corpus folder to sync."),
     quiet: bool = typer.Option(False, "--quiet", help="Disable progress UI."),
 ) -> None:
-    """Sync full-file text from file_ref handles into SQLite FTS."""
+    """Sync chunk rows into SQLite FTS."""
     _run_sync_action(sync_fts_action, path, quiet)
 
 
-@app.command("sync_chunks")
+@sync_app.command("chunks")
 def sync_chunks(
     path: Path = typer.Argument(Path("."), help="Corpus folder to sync."),
     max_chars: int = typer.Option(2000, "--max-chars", help="Approximate max characters per chunk."),
     quiet: bool = typer.Option(False, "--quiet", help="Disable progress UI."),
 ) -> None:
-    """Sync paragraph chunks from file_ref handles into SQLite FTS."""
+    """Sync paragraph chunks from Markdown derivatives."""
     _run_sync_action(sync_chunks_action, path, quiet, max_chars=max_chars)
 
 
@@ -230,8 +320,13 @@ def skills_show(name: str) -> None:
 def tools_list() -> None:
     """List discovered extension tools."""
     registry = load_extensions()
+    table = Table(title="Dorje Tools", show_lines=False)
+    table.add_column("Tool", style="bold cyan", overflow="fold")
+    table.add_column("Extension", style="green", overflow="fold")
+    table.add_column("Description", overflow="fold")
     for spec in registry.list():
-        print(f"{spec.name}\t{spec.extension_name}\t{spec.description.strip()}")
+        table.add_row(spec.name, spec.extension_name, spec.description.strip())
+    Console().print(table)
 
 
 @tools_app.command("call")

@@ -56,6 +56,16 @@ def init_schema(conn: apsw.Connection, vector_dim: int = VECTOR_DIM) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_handles_sha256 ON handles(sha256)")
     conn.execute(
         """
+        CREATE TABLE IF NOT EXISTS handle_payloads (
+            handle TEXT PRIMARY KEY,
+            content_text TEXT,
+            content_blob BLOB,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS handle_edges (
             child_handle TEXT NOT NULL,
             parent_handle TEXT NOT NULL,
@@ -200,6 +210,27 @@ def upsert_handle(
             orjson.dumps(metadata, option=orjson.OPT_SORT_KEYS).decode(),
             status,
         ),
+    )
+
+
+def upsert_handle_payload(
+    conn: apsw.Connection,
+    *,
+    handle: str,
+    content_text: str | None = None,
+    content_blob: bytes | None = None,
+) -> None:
+    """Insert/update handle payload content."""
+    conn.execute(
+        """
+        INSERT INTO handle_payloads (handle, content_text, content_blob)
+        VALUES (?, ?, ?)
+        ON CONFLICT(handle) DO UPDATE SET
+            content_text=excluded.content_text,
+            content_blob=excluded.content_blob,
+            updated_at=CURRENT_TIMESTAMP
+        """,
+        (handle, content_text, content_blob),
     )
 
 
