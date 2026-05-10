@@ -57,9 +57,9 @@ def test_chunk_markdown_paragraphs_and_sentences(tmp_path: Path, monkeypatch) ->
     assert HandleStore().get(cast(str, sentence_collection.members[0]["handle"])).metadata["chunk_type"] == "text/sentence"
 
 
-def test_chunk_strided_token_is_registered_placeholder(tmp_path: Path, monkeypatch) -> None:
+def test_chunk_markdown_strided_token_is_registered_placeholder(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     source = HandleStore().put("hello", content_type="text/markdown", derivative_type="extracted_markdown")
 
     with pytest.raises(NotImplementedError, match="tokenizer integration"):
-        _registry().call("chunk_strided_token", {"handle": source.handle})
+        _registry().call("chunk_markdown_strided_token", {"handle": source.handle})
